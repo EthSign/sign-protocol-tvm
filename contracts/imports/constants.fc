@@ -1,0 +1,33 @@
+const op::change_admin = "CHANGE_ADMIN"c;
+const op::revoke_attestation = "REVOKE_ATTESTATION"c;
+const op::attest = "ATTEST"c;
+;; operation codes
+
+const action::register = "REGISTER"c;
+const action::register_batch = "REGISTER_BATCH"c;
+const action::attest = "ATTEST"c;
+const action::attest_batch = "ATTEST_BATCH"c;
+const action::attest_offchain = "ATTEST_OFFCHAIN"c;
+const action::attest_offchain_batch = "ATTEST_OFFCHAIN_BATCH"c;
+const action::revoke = "REVOKE"c;
+const action::revoke_batch = "REVOKE_BATCH"c;
+const action::revoke_offchain = "REVOKE_OFFCHAIN"c;
+const action::revoke_offchain_batch = "REVOKE_OFFCHAIN_BATCH"c;
+;; action codes
+
+const error::paused = 0x9e87fac8;
+const error::schema_nonexistent = 0x38f8c6c4;
+const error::schema_wrong_registrant = 0x71984561;
+const error::attestation_irrevocable = 0x8ac42f49;
+const error::attestation_nonexistent = 0x54681a13;
+const error::attestation_invalid_duration = 0xa65e02ed;
+const error::attestation_already_revoked = 0xd8c3da86;
+const error::attestation_wrong_attester = 0xa9ad2007;
+const error::offchain_attestation_exists = 0xc83e3cdf;
+const error::offchain_attestation_nonexistent = 0xa006519a;
+const error::offchain_attestation_already_revoked = 0xa0671d20;
+const error::invalid_delegate_signature = 0xfdf4e6f9;
+const error::legacy_sp_required = 0x5c34b9cc;
+
+const error::unknown_op = 0xffff;
+;; error codes

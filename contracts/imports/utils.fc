@@ -1,0 +1,13 @@
+;; =============== sub-contract utils =============================
+
+(slice) generate_internal_address (int workchain_id, cell state_init) {
+    ;; addr_std$10 anycast:(Maybe Anycast) workchain_id:int8 address:bits256  = MsgAddressInt;
+
+  return begin_cell()
+    .store_uint(2, 2) ;; addr_std$10
+    .store_uint(0, 1) ;; anycast nothing
+    .store_int(workchain_id, 8) ;; workchain_id: -1
+    .store_uint(cell_hash(state_init), 256)
+    .end_cell()
+    .begin_parse();
+}

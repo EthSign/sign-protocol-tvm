@@ -1,0 +1,170 @@
+#pragma version >=0.3.0;
+
+#include "imports/stdlib.fc";
+#include "imports/constants.fc";
+
+#include "../node_modules/@ston-fi/funcbox/autoload.fc";
+
+;; =============== storage =============================
+
+global slice schema_id;
+global slice linked_attestation_id;
+global int attest_timestamp;
+global int revoke_timestamp;
+global slice attester;
+global int valid_until;
+global slice data_location;
+global int revoked;
+global int recipients_len;
+global tuple recipients;
+global int data;
+global int schema_counter_id;
+global int linked_attestation_counter_id;
+global int attestation_counter_id;
+global cell attestation_code;
+
+;; load_data populates storage variables using stored data
+() load_data() impure {
+  var ds = get_data().begin_parse();
+
+  schema_id = ds~load_msg_addr();
+  linked_attestation_id = ds~load_msg_addr();
+  attest_timestamp = ds~load_uint(64);
+  revoke_timestamp = ds~load_uint(64);
+  attester = ds~load_msg_addr();
+  valid_until = ds~load_uint(64);
+  data_location = ds~load_msg_addr();
+  revoked = ds~load_uint(1);
+  recipients_len = ds~load_uint(64);
+  recipients = empty_tuple();
+
+  int i = recipients_len;
+  slice recipient = "";
+
+  while (i > 0) {
+    recipient =  ds~load_msg_addr();
+    
+    recipients~tpush(recipient);
+
+    i = i - 1;
+  }
+
+  data = ds~load_uint(64);
+  schema_counter_id = ds~load_uint(64);
+  linked_attestation_counter_id = ds~load_uint(64);
+  attestation_counter_id = ds~load_uint(64);
+  attestation_code = ds~load_ref();
+
+  ds.end_parse();
+}
+
+;; save_data stores storage variables as a cell into persistent storage
+() save_data (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, tuple recipients, int data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id, cell attestation_code) impure {
+  int r_len = recipients.tlen();
+  var _data = begin_cell()
+    .store_slice(schema_id)
+    .store_slice(linked_attestation_id)
+    .store_uint(attest_timestamp, 64)
+    .store_uint(revoke_timestamp, 64)
+    .store_slice(attester)
+    .store_uint(valid_until, 64)
+    .store_slice(data_location)
+    .store_uint(revoked, 1)
+    .store_uint(r_len, 64);
+    
+  int i = r_len;
+
+  while (i > 0) {
+    slice recipient = recipients~tpop();
+
+    _data = _data.store_slice(recipient);
+    i = i - 1;
+  }
+
+  _data = _data
+    .store_uint(data, 64)
+    .store_uint(schema_counter_id, 64)
+    .store_uint(linked_attestation_counter_id, 64)
+    .store_uint(attestation_counter_id, 64)
+    .store_ref(attestation_code);
+
+  set_data(_data.end_cell());
+}
+
+;; =============== messages =============================
+
+;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+    return ();
+  }
+
+  slice cs = in_msg_full.begin_parse();
+  int flags = cs~load_uint(4);
+
+  if (flags & 1) {
+    return ();
+  }
+
+  load_data();
+
+  int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+  int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+  if (op == op::revoke_attestation) {
+    save_data(
+      schema_id,
+      linked_attestation_id,
+      attest_timestamp,
+      now(),
+      attester,
+      valid_until,
+      data_location,
+      1,
+      recipients,
+      data,
+      schema_counter_id,
+      linked_attestation_counter_id,
+      attestation_counter_id,
+      attestation_code
+    );
+
+    return ();
+  }
+
+  throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+;; =============== getters =============================
+
+cell get_attestation_data() method_id {
+  load_data();
+  
+  var attestation_data = begin_cell()
+    .store_slice(schema_id)
+    .store_slice(linked_attestation_id)
+    .store_uint(attest_timestamp, 64)
+    .store_uint(revoke_timestamp, 64)
+    .store_slice(attester)
+    .store_uint(valid_until, 64)
+    .store_slice(data_location)
+    .store_uint(revoked, 1);
+    
+  int i = recipients_len;
+  slice recipient = "";
+
+  while (i > 0) {
+    recipient = recipients~tpop();
+
+    attestation_data = attestation_data.store_slice(recipient);
+    i = i - 1;
+  }
+
+  attestation_data = attestation_data
+    .store_uint(data, 64)
+    .store_uint(schema_counter_id, 64)
+    .store_uint(linked_attestation_counter_id, 64)
+    .store_uint(attestation_counter_id, 64);
+
+  return attestation_data.end_cell();
+}

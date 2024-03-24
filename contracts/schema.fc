@@ -1,0 +1,98 @@
+#pragma version >=0.3.0;
+
+#include "imports/stdlib.fc";
+#include "imports/constants.fc";
+#include "imports/utils.fc";
+
+#include "../node_modules/@ston-fi/funcbox/autoload.fc";
+
+int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
+int gas_consumption() asm "13000000 PUSHINT"; ;; 0.013 TON
+
+;; =============== storage =============================
+
+global slice registrant;
+global int revocable;
+global slice data_location;
+global int max_valid_for;
+;; global cell hook; TODO: implement hooks
+global int timestamp;
+global int data;
+global int schema_counter_id;
+global slice sp_master_address;
+global cell schema_code;
+
+;; load_data populates storage variables using stored data
+() load_data() impure {
+  var ds = get_data().begin_parse();
+
+  registrant = ds~load_msg_addr();
+  revocable = ds~load_uint(1);
+  data_location = ds~load_msg_addr();
+  max_valid_for = ds~load_uint(64);
+  ;; hook = ds~load_ref(); TODO: implement hooks
+  timestamp = ds~load_uint(64);
+  data = ds~load_uint(64);
+  schema_counter_id = ds~load_uint(64);
+  sp_master_address = ds~load_msg_addr();
+  schema_code = ds~load_ref();
+
+  ds.end_parse();
+}
+
+;; save_data stores storage variables as a cell into persistent storage
+() save_data (slice registrant, int revocable, slice data_location, int max_valid_for, int timestamp, int data, int schema_counter_id, slice sp_master_address, cell schema_code) impure {
+  cell data = begin_cell()
+    .store_slice(registrant)
+    .store_uint(revocable, 1)
+    .store_slice(data_location)
+    .store_uint(max_valid_for, 64)
+    ;; .store_ref(hook) TODO: implement hooks
+    .store_uint(timestamp, 64)
+    .store_uint(data, 64)
+    .store_uint(schema_counter_id, 64)
+    .store_slice(sp_master_address)
+    .store_ref(schema_code)
+    .end_cell();
+
+  set_data(data);
+}
+
+;; =============== messages =============================
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+      return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+
+    if (flags & 1) {
+      return ();
+    }
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+;; =============== getters =============================
+
+cell get_schema_data() method_id {
+  load_data();
+  
+  cell schema_data = begin_cell()
+    .store_slice(registrant)
+    .store_uint(revocable, 1)
+    .store_slice(data_location)
+    .store_uint(max_valid_for, 64)
+    ;; .store_ref(hook) TODO: implement hooks
+    .store_uint(timestamp, 64)
+    .store_uint(data, 64)
+    .store_uint(schema_counter_id, 64)
+    .end_cell();
+
+  return schema_data;
+}
