@@ -1,0 +1,60 @@
+;; =============== storage =============================
+
+global int version;
+global slice admin_address;
+global int paused;
+global int schema_counter;
+global int attestation_counter;
+global int initial_schema_counter;
+global int initial_attestation_counter;
+global cell attestation_code;
+global cell attestation_offchain_code;
+global cell schema_code;
+
+() load_data() impure;
+() save_data (int version, slice admin_address, int paused, int schema_counter, int attestation_counter, int initial_schema_counter, int initial_attestation_counter, cell attestation_code, cell attestation_offchain_code, cell schema_code) impure;
+
+;; =============== functions =============================
+
+(slice, slice, int, int, slice, int, slice, int, int, tuple, slice, int, int, int) __get_attestation_data(cell _attestation);
+(slice, int) __get_offchain_attestation_data(cell _offchain_attestation);
+(slice, int, slice, int, int, slice, int) __get_schema_data(cell _schema);
+slice __deploy_contract (cell code, cell data, cell master_msg, int coins);
+cell __tuple_to_cell(tuple t);
+() __check_delegation_signature(slice delegate_attester, int hash, slice delegate_signature) impure inline;
+int __schema_exists(int schema_counter_id, int schema_timestamp) impure inline;
+int __attestation_exists(int attestation_counter_id) impure inline;
+int __offchain_attestation_exists(int attestation_timestamp) impure inline;
+
+int get_delegated_register_hash(cell schema) inline_ref;
+int get_delegated_register_batch_hash(tuple schemas, int schemas_len) inline_ref;
+int get_delegated_attest_hash(cell attestation) inline_ref;
+int get_delegated_attest_batch_hash(tuple attestations, int attestations_len) inline_ref;
+int get_delegated_offchain_attest_hash(slice offchain_attestation_id) inline_ref;
+int get_delegated_offchain_attest_batch_hash(tuple offchain_attestation_ids, int offchain_attestation_ids_len) inline_ref;
+int get_delegated_revoke_hash(slice attestation_id, slice reason) inline_ref;
+int get_delegated_revoke_batch_hash(tuple attestation_ids, tuple reasons) inline_ref;
+int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, slice reason) inline_ref;
+int get_delegated_offchain_revoke_batch_hash(tuple offchain_attestation_ids, tuple reasons) inline_ref;
+
+slice _register(cell _schema, cell master_msg) impure;
+slice register(cell schema, slice delegate_signature) method_id;
+tuple register_batch(tuple schemas, slice delegate_signature) method_id;
+
+(slice, slice) _attest(cell _attestation, cell _schema, slice indexing_key, int delegate_mode, slice sender_address, cell master_msg, int coins) impure;
+slice _attest_offchain(cell offchain_attestation, slice attester, cell master_msg, int coins) impure;
+slice attest(cell attestation, cell schema, slice indexing_key, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+slice attest_with_fees(cell attestation, cell schema, int resolver_fees, slice indexing_key, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+slice attest_offchain(slice offchain_attestation_id, cell offchain_attestation, slice delegate_attester, slice delegate_signature, slice sender_address) method_id;
+tuple attest_batch(tuple attestations, tuple schemas, tuple indexing_keys, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+tuple attest_batch_with_fees(tuple attestations, tuple schemas, tuple resolver_fees, tuple indexing_keys, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+tuple attest_offchain_batch(tuple offchain_attestations, slice delegate_attester, slice delegate_signature, slice sender_address) method_id;
+
+slice _revoke(slice attestation_id, cell attestation, cell schema, slice reason, int delegate_mode, slice sender_address, int query_id, int coins) impure;
+() _revoke_offchain(slice offchain_attestation_id, cell offchain_attestation, slice reason, int delegate_mode, slice sender_address, int query_id) impure;
+() revoke(slice attestation_id, cell attestation, cell schema, slice reason, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+() revoke_with_fees(slice attestation_id, cell attestation, cell schema, slice reason, int resolver_fees, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+() revoke_batch(tuple attestation_ids, tuple attestations, tuple schemas, tuple reasons, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+() revoke_batch_with_fees(tuple attestation_ids, tuple attestations, tuple schemas, tuple reasons, tuple resolver_fees, slice delegate_signature, slice extra_data, slice sender_address) method_id;
+() revoke_offchain(slice offchain_attestation_id, cell offchain_attestation, slice reason, slice delegate_signature, slice sender_address) method_id;
+() revoke_offchain_batch(tuple offchain_attestation_ids, tuple offchain_attestations, tuple reasons, slice delegate_signature, slice sender_address) method_id;

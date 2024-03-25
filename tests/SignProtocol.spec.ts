@@ -1,14 +1,17 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, beginCell, Address } from '@ton/core';
+import { Cell, toNano, beginCell } from '@ton/core';
 import { SignProtocol } from '../wrappers/SignProtocol';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
 
 describe('SignProtocol', () => {
-  let code: Cell;
+  let code: Cell, schemaCode: Cell, attestationCode: Cell, attestationOffchainCode: Cell;
 
   beforeAll(async () => {
     code = await compile('SignProtocol');
+    schemaCode = await compile('Schema');
+    attestationCode = await compile('Attestation');
+    attestationOffchainCode = await compile('AttestationOffchain');
   });
 
   let blockchain: Blockchain;
@@ -28,8 +31,9 @@ describe('SignProtocol', () => {
           attestationCounter: 0,
           initialSchemaCounter: 0,
           initialAttestationCounter: 0,
-          attestationCode: beginCell().endCell(),
-          schemaCode: beginCell().endCell(),
+          attestationCode,
+          attestationOffchainCode,
+          schemaCode,
         },
         code,
       ),

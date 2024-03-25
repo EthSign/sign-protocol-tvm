@@ -17,7 +17,7 @@ global slice data_location;
 global int revoked;
 global int recipients_len;
 global tuple recipients;
-global int data;
+global slice data;
 global int schema_counter_id;
 global int linked_attestation_counter_id;
 global int attestation_counter_id;
@@ -49,7 +49,7 @@ global cell attestation_code;
     i = i - 1;
   }
 
-  data = ds~load_uint(64);
+  data = ds~load_msg_addr();
   schema_counter_id = ds~load_uint(64);
   linked_attestation_counter_id = ds~load_uint(64);
   attestation_counter_id = ds~load_uint(64);
@@ -59,7 +59,7 @@ global cell attestation_code;
 }
 
 ;; save_data stores storage variables as a cell into persistent storage
-() save_data (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, tuple recipients, int data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id, cell attestation_code) impure {
+() save_data (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, tuple recipients, slice data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id, cell attestation_code) impure {
   int r_len = recipients.tlen();
   var _data = begin_cell()
     .store_slice(schema_id)
@@ -82,7 +82,7 @@ global cell attestation_code;
   }
 
   _data = _data
-    .store_uint(data, 64)
+    .store_slice(data)
     .store_uint(schema_counter_id, 64)
     .store_uint(linked_attestation_counter_id, 64)
     .store_uint(attestation_counter_id, 64)
@@ -161,7 +161,7 @@ cell get_attestation_data() method_id {
   }
 
   attestation_data = attestation_data
-    .store_uint(data, 64)
+    .store_slice(data)
     .store_uint(schema_counter_id, 64)
     .store_uint(linked_attestation_counter_id, 64)
     .store_uint(attestation_counter_id, 64);

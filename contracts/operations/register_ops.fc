@@ -1,0 +1,79 @@
+slice _register(cell _schema, cell master_msg) impure {
+  load_data();
+
+  if (paused) {
+    throw(error::paused);
+  }
+
+ (slice registrant, int revocable, slice data_location, int max_valid_for, int timestamp, slice data, int schema_counter_id) = __get_schema_data(_schema);
+ 
+  cell schema = begin_cell()
+    .store_slice(registrant)
+    .store_uint(revocable, 1)
+    .store_slice(data_location)
+    .store_uint(max_valid_for, 64)
+    .store_uint(now(), 64)
+    .store_slice(data)
+    .store_uint(schema_counter_id, 64)
+    .store_slice(my_address())
+    .store_ref(schema_code)
+    .end_cell();
+
+  slice schema_address = __deploy_contract(schema_code, schema, master_msg, 0);
+
+  console::log_raw("SCHEMA_REGISTERED");
+  console::log_raw(schema_address);
+
+  save_data(version, admin_address, paused, schema_counter + 1, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, attestation_offchain_code, schema_code);
+
+  return schema_address;
+}
+
+;; =============== register =============================
+
+slice register(cell schema, slice delegate_signature) method_id {
+  int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
+
+  (slice registrant, int revocable, slice data_location, int max_valid_for, int timestamp, slice data, int schema_counter_id) = __get_schema_data(schema);
+
+  if (delegate_mode) {
+    __check_delegation_signature(registrant, get_delegated_register_hash(schema), delegate_signature);
+  } else {
+    if (~(equal_slices(registrant, my_address()))) {
+      throw(error::schema_wrong_registrant);
+    }
+  }
+  
+  return _register(schema, empty_cell());
+}
+
+tuple register_batch(tuple schemas, slice delegate_signature) method_id {
+  int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
+  cell firstSchema = schemas~tpop();
+  (slice registrant, int revocable, slice data_location, int max_valid_for, int timestamp, slice data, int schema_counter_id) = __get_schema_data(firstSchema);
+
+  if (delegate_mode) {
+    __check_delegation_signature(registrant, get_delegated_register_batch_hash(schemas, schemas.tlen()), delegate_signature);
+  } else {
+    if (~(equal_slices(registrant, my_address()))) {
+      throw(error::schema_wrong_registrant);
+    }
+  }
+
+  tuple schema_ids = empty_tuple();
+
+  if (~(cell::is_empty(firstSchema))) {
+    schema_ids~tpush(_register(firstSchema, empty_cell()));
+  }
+
+  int i = schemas.tlen();
+
+  while (i > 0) {
+    cell schema = schemas~tpop();
+
+    schema_ids~tpush(_register(schema, empty_cell()));
+    i = i - 1;
+  }
+
+  return schema_ids;
+}

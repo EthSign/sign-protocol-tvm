@@ -1,0 +1,111 @@
+int get_delegated_register_hash(cell schema) inline_ref {
+  cell data_cell = begin_cell()
+    .store_uint(action::register, 32)
+    .store_ref(schema)
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_register_batch_hash(tuple schemas, int schemas_len) inline_ref {
+  cell data_cell = begin_cell()
+    .store_uint(action::register_batch, 32)
+    .store_ref(__tuple_to_cell(schemas))
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_attest_hash(cell attestation) inline_ref {
+  cell data_cell = begin_cell()
+    .store_uint(action::attest, 32)
+    .store_ref(attestation)
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_attest_batch_hash(tuple attestations, int attestations_len) inline_ref {
+  cell data_cell = begin_cell()
+    .store_uint(action::attest_batch, 32)
+    .store_ref(__tuple_to_cell(attestations))
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_offchain_attest_hash(slice offchain_attestation_id) inline_ref {
+  cell data_cell = begin_cell()
+    .store_uint(action::attest_offchain, 32)
+    .store_slice(offchain_attestation_id)
+    .end_cell();
+
+  return cell_hash(data_cell);
+}
+
+int get_delegated_offchain_attest_batch_hash(tuple offchain_attestation_ids, int offchain_attestation_ids_len) inline_ref {
+  cell data_cell = begin_cell()
+    .store_uint(action::attest_offchain_batch, 32)
+    .store_ref(__tuple_to_cell(offchain_attestation_ids))
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_revoke_hash(slice attestation_id, slice reason) inline_ref {
+  cell attestation_id_and_reason_cell = begin_cell()
+    .store_slice(attestation_id)
+    .store_slice(reason)
+    .end_cell();
+  cell data_cell = begin_cell()
+    .store_uint(action::revoke, 32)
+    .store_ref(attestation_id_and_reason_cell)
+    .end_cell();
+  
+  return cell_hash(data_cell);
+}
+
+int get_delegated_revoke_batch_hash(tuple attestation_ids, tuple reasons) inline_ref {
+  cell attestation_ids_cell = __tuple_to_cell(attestation_ids);
+  cell reasons_cell = __tuple_to_cell(reasons);
+
+  cell attestation_ids_and_reasons_cell = begin_cell()
+    .store_ref(attestation_ids_cell)
+    .store_ref(reasons_cell)
+    .end_cell();
+  cell data_cell = begin_cell()
+    .store_uint(action::revoke_batch, 32)
+    .store_ref(attestation_ids_and_reasons_cell)
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, slice reason) inline_ref {
+  cell offchain_attestation_id_and_reason_cell = begin_cell()
+    .store_slice(offchain_attestation_id)
+    .store_slice(reason)
+    .end_cell();
+  cell data_cell = begin_cell()
+    .store_uint(action::revoke_offchain, 32)
+    .store_ref(offchain_attestation_id_and_reason_cell)
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}
+
+int get_delegated_offchain_revoke_batch_hash(tuple offchain_attestation_ids, tuple reasons) inline_ref {
+  cell offchain_attestation_ids_cell = __tuple_to_cell(offchain_attestation_ids);
+  cell reasons_cell = __tuple_to_cell(reasons);
+
+  cell offchain_attestation_ids_and_reasons_cell = begin_cell()
+    .store_ref(offchain_attestation_ids_cell)
+    .store_ref(reasons_cell)
+    .end_cell();
+  cell data_cell = begin_cell()
+    .store_uint(action::revoke_offchain_batch, 32)
+    .store_ref(offchain_attestation_ids_and_reasons_cell)
+    .end_cell();
+    
+  return cell_hash(data_cell);
+}

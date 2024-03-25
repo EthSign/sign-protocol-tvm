@@ -9,6 +9,7 @@ import {
   SendMode,
   Slice,
 } from '@ton/core';
+import { OP_CODES } from '../utils';
 
 export type SignProtocolConfig = {
   version: number;
@@ -19,6 +20,7 @@ export type SignProtocolConfig = {
   initialSchemaCounter: number;
   initialAttestationCounter: number;
   attestationCode: Cell;
+  attestationOffchainCode: Cell;
   schemaCode: Cell;
 };
 
@@ -32,6 +34,7 @@ export function signProtocolConfigToCell(config: SignProtocolConfig): Cell {
     initialSchemaCounter,
     initialAttestationCounter,
     attestationCode,
+    attestationOffchainCode,
     schemaCode,
   } = config;
 
@@ -44,6 +47,7 @@ export function signProtocolConfigToCell(config: SignProtocolConfig): Cell {
     .storeUint(initialSchemaCounter, 64)
     .storeUint(initialAttestationCounter, 64)
     .storeRef(attestationCode)
+    .storeRef(attestationOffchainCode)
     .storeRef(schemaCode)
     .endCell();
 }
@@ -72,18 +76,39 @@ export class SignProtocol implements Contract {
     });
   }
 
-  async get_version(provider: ContractProvider) {
+  async getVersion(provider: ContractProvider): Promise<number> {
     const result = await provider.get('get_version', []);
-    return result.stack.readBigNumber();
+    return Number(result.stack.readBigNumber());
   }
 
-  async get_schema_counter(provider: ContractProvider) {
+  async getPaused(provider: ContractProvider): Promise<boolean> {
+    const result = await provider.get('get_paused', []);
+    return Boolean(result.stack.readNumber());
+  }
+
+  async getSchemaCounter(provider: ContractProvider): Promise<number> {
     const result = await provider.get('get_schema_counter', []);
-    return result.stack.readBigNumber();
+    return Number(result.stack.readBigNumber());
   }
 
-  async get_attestation_counter(provider: ContractProvider) {
+  async getAttestationCounter(provider: ContractProvider): Promise<number> {
     const result = await provider.get('get_attestation_counter', []);
-    return result.stack.readBigNumber();
+    return Number(result.stack.readBigNumber());
+  }
+
+  async getChangePause(provider: ContractProvider, via: Sender, paused: boolean) {
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OP_CODES.ChangePaused, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeUint(Number(paused), 1)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.01',
+      body: messageBody,
+    });
+
+    return result;
   }
 }

@@ -4,9 +4,10 @@ import { compile, NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
   const cellAddress = beginCell()
-    .storeAddress(Address.parse(process.env.ADDRESS ?? ''))
+    .storeAddress(Address.parse(process.env.ADMIN_ADDRESS ?? ''))
     .endCell();
   const attestationCode = await compile('Attestation');
+  const attestationOffchainCode = await compile('AttestationOffchain');
   const schemaCode = await compile('Schema');
   const signProtocolCode = await compile('SignProtocol');
   const signProtocol = provider.open(
@@ -20,6 +21,7 @@ export async function run(provider: NetworkProvider) {
         initialSchemaCounter: 0,
         initialAttestationCounter: 0,
         attestationCode,
+        attestationOffchainCode,
         schemaCode,
       },
       signProtocolCode,
@@ -30,7 +32,7 @@ export async function run(provider: NetworkProvider) {
 
   await provider.waitForDeploy(signProtocol.address);
 
-  console.log('Version', await signProtocol.get_version());
-  console.log('Schema Count', await signProtocol.get_schema_counter());
-  console.log('Attestation Count', await signProtocol.get_attestation_counter());
+  console.log('Version', await signProtocol.getVersion());
+  console.log('Schema Count', await signProtocol.getSchemaCounter());
+  console.log('Attestation Count', await signProtocol.getAttestationCounter());
 }

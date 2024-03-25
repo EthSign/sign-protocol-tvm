@@ -1,4 +1,5 @@
 const op::change_admin = "CHANGE_ADMIN"c;
+const op::change_paused = "CHANGE_PAUSED"c;
 const op::revoke_attestation = "REVOKE_ATTESTATION"c;
 const op::attest = "ATTEST"c;
 ;; operation codes
@@ -30,4 +31,8 @@ const error::invalid_delegate_signature = 0xfdf4e6f9;
 const error::legacy_sp_required = 0x5c34b9cc;
 
 const error::unknown_op = 0xffff;
+const error::expired_message = 0x20;
+const error::repeated_message = 0x21;
+const error::invalid_signature = 0x22;
+const error::unauthorized = 0x23;
 ;; error codes

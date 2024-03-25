@@ -1,0 +1,125 @@
+int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
+int gas_consumption() asm "2000000 PUSHINT"; ;; 0.02 TON
+int master_contract_storage_fee() asm "500000 PUSHINT"; ;; 0.005 TON
+
+(slice, slice, int, int, slice, int, slice, int, int, tuple, slice, int, int, int) __get_attestation_data(cell _attestation) {
+  slice attestation_slice = _attestation.begin_parse();
+
+  slice schema_id = attestation_slice~load_msg_addr();
+  slice linked_attestation_id = attestation_slice~load_msg_addr();
+  int attest_timestamp = attestation_slice~load_uint(64);
+  int revoke_timestamp = attestation_slice~load_uint(64);
+  slice attester = attestation_slice~load_msg_addr();
+  int valid_until = attestation_slice~load_uint(64);
+  slice data_location = attestation_slice~load_msg_addr();
+  int revoked = attestation_slice~load_uint(1);
+  int recipients_len = attestation_slice~load_uint(64);
+  tuple recipients = empty_tuple();
+
+  int i = recipients_len;
+  slice recipient = "";
+
+  while (i > 0) {
+    recipient = attestation_slice~load_msg_addr();
+    
+    recipients~tpush(recipient);
+
+    i = i - 1;
+  }
+
+  slice data = attestation_slice~load_msg_addr();
+  int schema_counter_id = attestation_slice~load_uint(64);
+  int linked_attestation_counter_id = attestation_slice~load_uint(64);
+  int attestation_counter_id = attestation_slice~load_uint(64);
+
+  attestation_slice.end_parse();
+
+  return (schema_id, linked_attestation_id, attest_timestamp, revoke_timestamp, attester, valid_until, data_location, revoked, recipients_len, recipients, data, schema_counter_id, linked_attestation_counter_id, attestation_counter_id);
+}
+
+(slice, int) __get_offchain_attestation_data(cell _offchain_attestation) {
+  slice offchain_attestation_slice = _offchain_attestation.begin_parse();
+
+  slice attester = offchain_attestation_slice~load_msg_addr();
+  int timestamp = offchain_attestation_slice~load_uint(64);
+
+  offchain_attestation_slice.end_parse();
+
+  return (attester, timestamp);
+}
+
+(slice, int, slice, int, int, slice, int) __get_schema_data(cell _schema) {
+  slice schema_slice = _schema.begin_parse();
+
+  slice registrant = schema_slice~load_msg_addr();
+  int revocable = schema_slice~load_uint(1);
+  slice data_location = schema_slice~load_msg_addr();
+  int max_valid_for = schema_slice~load_uint(64);
+  ;; hook = ds~load_ref(); TODO: implement hooks
+  int timestamp = schema_slice~load_uint(64);
+  slice data = schema_slice~load_msg_addr();
+  int schema_counter_id = schema_slice~load_uint(64);
+
+  schema_slice.end_parse();
+
+  return (registrant, revocable, data_location, max_valid_for, timestamp, data, schema_counter_id);
+}
+
+slice __deploy_contract (cell code, cell data, cell master_msg, int coins) {
+  cell state_init = begin_cell()
+    .store_uint(0, 1)
+    .store_uint(0, 1)
+    .store_uint(1, 1)
+    .store_ref(code)
+    .store_uint(1, 1)
+    .store_ref(data)
+    .store_uint(0, 1)
+    .end_cell();
+  slice address = generate_internal_address(0, state_init);
+  var msg = begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(address)
+    .store_coins((gas_consumption() + coins - master_contract_storage_fee()))
+    .store_uint(0, 1 + 4 + 4 + 64 + 32)
+    .store_uint(1, 1)
+    .store_uint(1, 1)
+    .store_ref(state_init)
+    .store_uint(1, 1)
+    .store_ref(master_msg);
+  
+  send_raw_message(msg.end_cell(), 1); ;; pay transfer fees separately, revert on errors
+
+  return address;
+}
+
+cell __tuple_to_cell(tuple t) {
+  var c = begin_cell();
+  int i = t.tlen();
+
+  while (i > 0) {
+    cell e = t~tpop();
+
+    c = c.store_ref(e);
+    i = i - 1;
+  }
+
+  return c.end_cell();
+}
+
+() __check_delegation_signature(slice delegate_attester, int hash, slice delegate_signature) impure inline {
+  if (check_signature(hash, delegate_signature, delegate_attester.cast_to_int()) == 0) {
+    throw(error::invalid_delegate_signature);
+  }
+}
+
+int __schema_exists(int schema_counter_id, int schema_timestamp) impure inline {
+  return (schema_counter_id < schema_counter) & (schema_counter_id > 0) & (schema_timestamp > 0);
+}
+
+int __attestation_exists(int attestation_counter_id) impure inline {
+  return attestation_counter_id < attestation_counter;
+}
+
+int __offchain_attestation_exists(int attestation_timestamp) impure inline {
+  return attestation_timestamp != 0;
+}

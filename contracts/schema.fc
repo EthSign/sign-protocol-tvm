@@ -6,9 +6,6 @@
 
 #include "../node_modules/@ston-fi/funcbox/autoload.fc";
 
-int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
-int gas_consumption() asm "13000000 PUSHINT"; ;; 0.013 TON
-
 ;; =============== storage =============================
 
 global slice registrant;
@@ -17,9 +14,8 @@ global slice data_location;
 global int max_valid_for;
 ;; global cell hook; TODO: implement hooks
 global int timestamp;
-global int data;
+global slice data;
 global int schema_counter_id;
-global slice sp_master_address;
 global cell schema_code;
 
 ;; load_data populates storage variables using stored data
@@ -32,16 +28,15 @@ global cell schema_code;
   max_valid_for = ds~load_uint(64);
   ;; hook = ds~load_ref(); TODO: implement hooks
   timestamp = ds~load_uint(64);
-  data = ds~load_uint(64);
+  data = ds~load_msg_addr();
   schema_counter_id = ds~load_uint(64);
-  sp_master_address = ds~load_msg_addr();
   schema_code = ds~load_ref();
 
   ds.end_parse();
 }
 
 ;; save_data stores storage variables as a cell into persistent storage
-() save_data (slice registrant, int revocable, slice data_location, int max_valid_for, int timestamp, int data, int schema_counter_id, slice sp_master_address, cell schema_code) impure {
+() save_data (slice registrant, int revocable, slice data_location, int max_valid_for, int timestamp, slice data, int schema_counter_id, cell schema_code) impure {
   cell data = begin_cell()
     .store_slice(registrant)
     .store_uint(revocable, 1)
@@ -49,9 +44,8 @@ global cell schema_code;
     .store_uint(max_valid_for, 64)
     ;; .store_ref(hook) TODO: implement hooks
     .store_uint(timestamp, 64)
-    .store_uint(data, 64)
+    .store_slice(data)
     .store_uint(schema_counter_id, 64)
-    .store_slice(sp_master_address)
     .store_ref(schema_code)
     .end_cell();
 
@@ -90,7 +84,7 @@ cell get_schema_data() method_id {
     .store_uint(max_valid_for, 64)
     ;; .store_ref(hook) TODO: implement hooks
     .store_uint(timestamp, 64)
-    .store_uint(data, 64)
+    .store_slice(data)
     .store_uint(schema_counter_id, 64)
     .end_cell();
 
