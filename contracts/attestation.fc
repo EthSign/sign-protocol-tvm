@@ -12,16 +12,16 @@ global slice linked_attestation_id;
 global int attest_timestamp;
 global int revoke_timestamp;
 global slice attester;
+global int attester_pubkey;
 global int valid_until;
-global slice data_location;
+global int data_location;
 global int revoked;
 global int recipients_len;
 global tuple recipients;
-global slice data;
+global int data;
 global int schema_counter_id;
 global int linked_attestation_counter_id;
 global int attestation_counter_id;
-global cell attestation_code;
 
 ;; load_data populates storage variables using stored data
 () load_data() impure {
@@ -29,66 +29,76 @@ global cell attestation_code;
 
   schema_id = ds~load_msg_addr();
   linked_attestation_id = ds~load_msg_addr();
-  attest_timestamp = ds~load_uint(64);
-  revoke_timestamp = ds~load_uint(64);
   attester = ds~load_msg_addr();
-  valid_until = ds~load_uint(64);
-  data_location = ds~load_msg_addr();
-  revoked = ds~load_uint(1);
-  recipients_len = ds~load_uint(64);
+  attest_timestamp = ds~load_uint(32);
+  revoke_timestamp = ds~load_uint(32);
+
+  slice s1 = ds~load_ref().begin_parse();
+  attester_pubkey = s1~load_uint(256);
+  valid_until = s1~load_uint(32);
+  data_location = s1~load_uint(2);
+  revoked = s1~load_uint(1);
+
+  slice s2 = ds~load_ref().begin_parse();
+  recipients_len = s2~load_uint(64);
   recipients = empty_tuple();
 
   int i = recipients_len;
   slice recipient = "";
 
   while (i > 0) {
-    recipient =  ds~load_msg_addr();
+    recipient =  s2~load_msg_addr();
     
     recipients~tpush(recipient);
 
     i = i - 1;
   }
 
-  data = ds~load_msg_addr();
-  schema_counter_id = ds~load_uint(64);
-  linked_attestation_counter_id = ds~load_uint(64);
-  attestation_counter_id = ds~load_uint(64);
-  attestation_code = ds~load_ref();
-
-  ds.end_parse();
+  slice s3 = ds~load_ref().begin_parse();
+  data = s3~load_uint(256);
+  schema_counter_id = s2~load_uint(64);
+  linked_attestation_counter_id = s3~load_uint(64);
+  attestation_counter_id = s3~load_uint(64);
 }
 
 ;; save_data stores storage variables as a cell into persistent storage
-() save_data (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, tuple recipients, slice data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id, cell attestation_code) impure {
-  int r_len = recipients.tlen();
-  var _data = begin_cell()
-    .store_slice(schema_id)
-    .store_slice(linked_attestation_id)
-    .store_uint(attest_timestamp, 64)
-    .store_uint(revoke_timestamp, 64)
-    .store_slice(attester)
-    .store_uint(valid_until, 64)
-    .store_slice(data_location)
-    .store_uint(revoked, 1)
+() save_data (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, tuple _recipients, int _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id) impure {
+  int r_len = _recipients.tlen();
+  var c1 = begin_cell()
+    .store_uint(_attester_pubkey, 256)
+    .store_uint(_valid_until, 32)
+    .store_uint(_data_location, 2)
+    .store_uint(_revoked, 1)
+    .end_cell();
+  var c2 = begin_cell()
     .store_uint(r_len, 64);
-    
+
   int i = r_len;
 
   while (i > 0) {
-    slice recipient = recipients~tpop();
+    slice recipient = _recipients~tpop();
 
-    _data = _data.store_slice(recipient);
+    c2 = c2.store_slice(recipient);
     i = i - 1;
   }
 
-  _data = _data
-    .store_slice(data)
-    .store_uint(schema_counter_id, 64)
-    .store_uint(linked_attestation_counter_id, 64)
-    .store_uint(attestation_counter_id, 64)
-    .store_ref(attestation_code);
+  var c3 = begin_cell()
+    .store_uint(_data, 256)
+    .store_uint(_schema_counter_id, 64)
+    .store_uint(_linked_attestation_counter_id, 64)
+    .store_uint(_attestation_counter_id, 64)
+    .end_cell();
+  var attestation_data = begin_cell()
+    .store_slice(_schema_id)
+    .store_slice(_linked_attestation_id)
+    .store_slice(_attester)
+    .store_uint(_attest_timestamp, 32)
+    .store_uint(_revoke_timestamp, 32)
+    .store_ref(c1)
+    .store_ref(c2.end_cell())
+    .store_ref(c3);
 
-  set_data(_data.end_cell());
+  set_data(attestation_data.end_cell());
 }
 
 ;; =============== messages =============================
@@ -118,6 +128,7 @@ global cell attestation_code;
       attest_timestamp,
       now(),
       attester,
+      attester_pubkey,
       valid_until,
       data_location,
       1,
@@ -125,8 +136,7 @@ global cell attestation_code;
       data,
       schema_counter_id,
       linked_attestation_counter_id,
-      attestation_counter_id,
-      attestation_code
+      attestation_counter_id
     );
 
     return ();
@@ -140,31 +150,40 @@ global cell attestation_code;
 cell get_attestation_data() method_id {
   load_data();
   
-  var attestation_data = begin_cell()
-    .store_slice(schema_id)
-    .store_slice(linked_attestation_id)
-    .store_uint(attest_timestamp, 64)
-    .store_uint(revoke_timestamp, 64)
-    .store_slice(attester)
-    .store_uint(valid_until, 64)
-    .store_slice(data_location)
-    .store_uint(revoked, 1);
-    
+  var c1 = begin_cell()
+    .store_uint(attester_pubkey, 256)
+    .store_uint(valid_until, 32)
+    .store_uint(data_location, 2)
+    .store_uint(revoked, 1)
+    .end_cell();
+  var c2 = begin_cell()
+    .store_uint(recipients_len, 64);
+
   int i = recipients_len;
   slice recipient = "";
 
   while (i > 0) {
     recipient = recipients~tpop();
 
-    attestation_data = attestation_data.store_slice(recipient);
+    c2 = c2.store_slice(recipient);
     i = i - 1;
   }
-
-  attestation_data = attestation_data
-    .store_slice(data)
+  
+  var c3 = begin_cell()
+    .store_uint(data, 256)
     .store_uint(schema_counter_id, 64)
     .store_uint(linked_attestation_counter_id, 64)
-    .store_uint(attestation_counter_id, 64);
-
+    .store_uint(attestation_counter_id, 64)
+    .end_cell();
+  var attestation_data = begin_cell()
+    .store_slice(schema_id)
+    .store_slice(linked_attestation_id)
+    .store_slice(attester)
+    .store_uint(attest_timestamp, 32)
+    .store_uint(revoke_timestamp, 32)
+    .store_ref(c1)
+    .store_ref(c2.end_cell())
+    .store_ref(c3);
+    
   return attestation_data.end_cell();
 }

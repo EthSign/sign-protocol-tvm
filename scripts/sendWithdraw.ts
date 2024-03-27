@@ -7,9 +7,9 @@ export async function run(provider: NetworkProvider) {
     SignProtocol.createFromAddress(Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '')),
   );
 
-  const pause = await signProtocol.getPaused();
+  const amount = '0.19';
 
-  console.log('Current Pause', pause);
+  console.log('Withdrawing', amount);
 
-  await signProtocol.sendChangePause(provider.sender(), !pause);
+  await signProtocol.sendWithdraw(provider.sender(), amount);
 }

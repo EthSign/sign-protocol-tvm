@@ -33,27 +33,26 @@
 
 ;; save_data stores storage variables as a cell into persistent storage
 () save_data (int version, slice admin_address, int paused, int schema_counter, int attestation_counter, int initial_schema_counter, int initial_attestation_counter, cell attestation_code, cell attestation_offchain_code, cell schema_code) impure {
-  set_data(
-    begin_cell()
-      .store_uint(version, 64)
-      .store_slice(admin_address)
-      .store_uint(paused, 1)
-      .store_uint(schema_counter, 64)
-      .store_uint(attestation_counter, 64)
-      .store_uint(initial_schema_counter, 64)
-      .store_uint(initial_attestation_counter, 64)
-      .store_uint(version, 64)
-      .store_ref(attestation_code)
-      .store_ref(attestation_offchain_code)
-      .store_ref(schema_code)
-      .end_cell()
-  );
+  cell data = begin_cell()
+    .store_uint(version, 64)
+    .store_slice(admin_address)
+    .store_uint(paused, 1)
+    .store_uint(schema_counter, 64)
+    .store_uint(attestation_counter, 64)
+    .store_uint(initial_schema_counter, 64)
+    .store_uint(initial_attestation_counter, 64)
+    .store_ref(attestation_code)
+    .store_ref(attestation_offchain_code)
+    .store_ref(schema_code)
+    .end_cell();
+    
+  set_data(data);
 }
 
 ;; =============== messages =============================
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
-() recv_internal(slice in_msg) impure {
+() recv_internal(int balance, int msg_value, cell in_msg_cell, slice in_msg) {
   if (in_msg.slice_empty?()) { ;; ignore all empty messages
     return ();
   }
@@ -67,51 +66,130 @@
   int op = in_msg~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
   int query_id = in_msg~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
   slice sender_address = in_msg~load_msg_addr();
-  load_data();
 
   if (op == op::change_admin) {
+    load_data();
     throw_unless(error::unauthorized, equal_slices(sender_address, admin_address));
 
     slice new_admin_address = in_msg~load_msg_addr();
 
+    throw_if(error::invalid_message_params, new_admin_address.slice_empty?());
+
     save_data(version, new_admin_address, paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, attestation_offchain_code, schema_code);
+    return ();
+  }
+  
+  if (op == op::change_code) {
+    load_data();
+    throw_unless(error::unauthorized, equal_slices(sender_address, admin_address));
+
+    int code_type = in_msg~load_uint(32);
+    cell new_code = in_msg~load_ref();
+
+    throw_if(error::invalid_message_params, equal_cells(new_code, empty_cell()));
+
+    if (code_type == code_type::attestation) {
+      save_data(version, admin_address, paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, new_code, attestation_offchain_code, schema_code);
+    }
+    
+    if (code_type == code_type::attestation_offchain) {
+      save_data(version, admin_address, paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, new_code, schema_code);
+    }
+    
+    if (code_type == code_type::schema) {
+      save_data(version, admin_address, paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, attestation_offchain_code, new_code);
+    }
+
+    if (code_type == code_type::sp) {
+      set_code(new_code);
+      save_data(version, admin_address, paused, schema_counter, attestation_counter, schema_counter, attestation_counter, attestation_code, attestation_offchain_code, schema_code);
+    }
+
+    return ();
+  }
+
+  if (op == op::change_version) {
+    load_data();
+    throw_unless(error::unauthorized, equal_slices(sender_address, admin_address));
+
+    int new_version = in_msg~load_uint(64);
+
+    save_data(new_version, admin_address, paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, attestation_offchain_code, schema_code);
+
     return ();
   }
 
   if (op == op::change_paused) {
+    load_data();
     throw_unless(error::unauthorized, equal_slices(sender_address, admin_address));
 
     int _paused = in_msg~load_uint(1);
 
+    throw_if(error::invalid_message_params, (_paused < 0) | (_paused > 1));
+
     save_data(version, admin_address, _paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, attestation_offchain_code, schema_code);
+
     return ();
   }
 
-  throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
-}
+  if (op == op::withdraw) {
+    load_data();
+    throw_unless(error::unauthorized, equal_slices(sender_address, admin_address));
 
-() recv_external(slice in_msg) impure {
-  ;; var signature = in_msg~load_bits(32);
-  ;; var cs = in_msg;
-  ;; var (valid_until, msg_seqno) = (cs~load_uint(32), cs~load_uint(32));
+    int amount = in_msg~load_coins();
 
-  ;; throw_if(error::expired_message, valid_until <= now());
+    throw_if(error::invalid_message_params, (balance - amount) < min_tons_for_storage());
 
-  ;; load_data();
+    builder content = begin_cell().store_withdraw_completed();
+    var body = begin_cell()
+        .store_uint(0, 32)
+        .store_builder(content)
+        .end_cell();
+    var msg = begin_cell()
+      .store_uint(0x10, 6)
+      .store_slice(sender_address)
+      .store_coins(amount)
+      .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+      .store_ref(body)
+      .end_cell();
 
-  ;; throw_unless(error::repeated_message, msg_seqno == cur_seqno);
-  ;; accept_message();
-  ;; save_data(version, admin_address, paused, schema_counter, attestation_counter, initial_schema_counter, initial_attestation_counter, attestation_code, attestation_offchain_code, schema_code, cur_seqno + 1);
-  ;; commit();
-  ;; cs~touch();
+    send_raw_message(msg, 0);
 
-  ;; slice sender_address = cs~load_msg_addr();
-  ;; int pubkey = cs~load_uint(32);
-  ;; int op = cs~load_uint(32);
+    return ();
+  }
 
-  ;; throw_unless(error::invalid_signature, check_signature(slice_hash(in_msg), signature, pubkey));
+  if (op == op::register) {
+    var signature = in_msg~load_bits(512);
+    cell schema = in_msg~load_ref();
+
+    register(schema, signature);
+
+    return ();
+  }
+
+  if (op == op::attest) {
+    var signature = in_msg~load_bits(512);
+    cell attestation = in_msg~load_ref();
+    cell schema = in_msg~load_ref();
+
+    attest(attestation, schema, signature, sender_address);
+
+    return ();
+  }
   
-  ;; throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
+  if (op == op::revoke) {
+    var signature = in_msg~load_bits(512);
+    slice attestation_id = in_msg~load_msg_addr();
+    cell attestation = in_msg~load_ref();
+    cell schema = in_msg~load_ref();
+    int reason = in_msg~load_uint(256);
+
+    revoke(attestation_id, attestation, schema,  reason, signature, sender_address);
+
+    return ();
+  }
+  
+  throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
 }
 
 ;; =============== getter functions =============================

@@ -1,51 +1,38 @@
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
 import {
-  Address,
-  beginCell,
-  Cell,
-  Contract,
-  contractAddress,
-  ContractProvider,
-  Sender,
-  SendMode,
-  Slice,
-} from '@ton/core';
+  bufferToInt,
+  DataLocation,
+  dateToUnixTimestamp,
+  intToBuffer,
+  intToString,
+  stringToInt,
+  unixTimestampToDate,
+} from '../utils';
 
 export type SchemaConfig = {
-  registrant: Slice;
-  revocable: number;
-  dataLocation: Slice;
-  maxValidFor: number;
-  timestamp: number;
-  data: Slice;
-  schemaCounterId: number;
-  spMasterAddress: Slice;
-  schemaCode: Cell;
-};
-
-export type SchemaData = {
-  registrant: string;
+  registrant: Address;
+  registrantPubKey: Buffer;
   revocable: boolean;
-  dataLocation: string;
-  maxValidFor: number;
-  timestamp: number;
+  dataLocation: DataLocation;
+  maxValidFor: Date;
+  timestamp: Date;
   data: string;
   schemaCounterId: number;
-  spMasterAddress: string;
 };
 
 export function schemaConfigToCell(config: SchemaConfig): Cell {
-  const { registrant, revocable, dataLocation, maxValidFor, timestamp, data, schemaCounterId, spMasterAddress } =
+  const { registrant, registrantPubKey, revocable, dataLocation, maxValidFor, timestamp, data, schemaCounterId } =
     config;
-
+  const c1 = beginCell().storeUint(stringToInt(data), 256).endCell();
   return beginCell()
-    .storeSlice(registrant)
-    .storeUint(revocable, 1)
-    .storeSlice(dataLocation)
-    .storeUint(maxValidFor, 64)
-    .storeUint(timestamp, 64)
-    .storeSlice(data)
+    .storeAddress(registrant)
+    .storeUint(bufferToInt(registrantPubKey), 256)
+    .storeUint(Number(revocable), 1)
+    .storeUint(dataLocation, 2)
+    .storeUint(dateToUnixTimestamp(maxValidFor), 32)
+    .storeUint(dateToUnixTimestamp(timestamp), 32)
     .storeUint(schemaCounterId, 64)
-    .storeSlice(spMasterAddress)
+    .storeRef(c1)
     .endCell();
 }
 
@@ -73,19 +60,30 @@ export class Schema implements Contract {
     });
   }
 
-  async getSchemaData(provider: ContractProvider): Promise<SchemaData> {
+  async getSchemaData(provider: ContractProvider): Promise<SchemaConfig> {
     const result = await provider.get('get_schema_data', []);
     let cellHash = result.stack.readCell().beginParse();
 
+    const registrant = cellHash.loadAddress();
+    const registrantPubKey = intToBuffer(cellHash.loadUint(256));
+    const revocable = !!cellHash.loadUint(1);
+    const dataLocation = cellHash.loadUint(2) as DataLocation;
+    const maxValidFor = unixTimestampToDate(cellHash.loadUint(32));
+    const timestamp = unixTimestampToDate(cellHash.loadUint(32));
+    const schemaCounterId = cellHash.loadUint(64);
+
+    const s1 = cellHash.loadRef().beginParse();
+    const data = intToString(s1.loadUint(256));
+
     return {
-      registrant: cellHash.loadAddress().toString(),
-      revocable: !!cellHash.loadUint(1),
-      dataLocation: cellHash.loadAddress().toString(),
-      maxValidFor: cellHash.loadUint(64),
-      timestamp: cellHash.loadUint(64),
-      data: cellHash.loadAddress().toString(),
-      schemaCounterId: cellHash.loadUint(64),
-      spMasterAddress: cellHash.loadAddress().toString(),
+      registrant,
+      registrantPubKey,
+      revocable,
+      dataLocation,
+      maxValidFor,
+      timestamp,
+      data,
+      schemaCounterId,
     };
   }
 }

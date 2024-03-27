@@ -6,6 +6,7 @@
 ;; =============== storage =============================
 
 global slice attester;
+global int attester_pubkey;
 global int timestamp;
 
 ;; load_data populates storage variables using stored data
@@ -13,16 +14,16 @@ global int timestamp;
   var ds = get_data().begin_parse();
 
   attester = ds~load_msg_addr();
-  timestamp = ds~load_uint(64);
-
-  ds.end_parse();
+  attester_pubkey = ds~load_uint(256);
+  timestamp = ds~load_uint(32);
 }
 
 ;; save_data stores storage variables as a cell into persistent storage
-() save_data (slice attester, int timestamp) impure {
+() save_data (slice _attester, int _attester_pubkey, int _timestamp) impure {
   cell data = begin_cell()
-    .store_slice(attester)
-    .store_uint(timestamp, 64)
+    .store_slice(_attester)
+    .store_uint(_attester_pubkey, 256)
+    .store_uint(_timestamp, 32)
     .end_cell();
     
   set_data(data);
@@ -49,7 +50,7 @@ global int timestamp;
   int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
   if (op == op::revoke_attestation) {
-    save_data(attester, 1);
+    save_data(attester, attester_pubkey, 1);
 
     return ();
   }
@@ -64,7 +65,8 @@ cell get_offchain_attestation_data() method_id {
   
   cell attestation_data = begin_cell()
     .store_slice(attester)
-    .store_uint(timestamp, 64)
+    .store_uint(attester_pubkey, 256)
+    .store_uint(timestamp, 32)
     .end_cell();
 
   return attestation_data;

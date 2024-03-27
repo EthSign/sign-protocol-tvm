@@ -52,10 +52,10 @@ int get_delegated_offchain_attest_batch_hash(tuple offchain_attestation_ids, int
   return cell_hash(data_cell);
 }
 
-int get_delegated_revoke_hash(slice attestation_id, slice reason) inline_ref {
+int get_delegated_revoke_hash(slice attestation_id, int reason) inline_ref {
   cell attestation_id_and_reason_cell = begin_cell()
     .store_slice(attestation_id)
-    .store_slice(reason)
+    .store_uint(reason, 256)
     .end_cell();
   cell data_cell = begin_cell()
     .store_uint(action::revoke, 32)
@@ -81,10 +81,10 @@ int get_delegated_revoke_batch_hash(tuple attestation_ids, tuple reasons) inline
   return cell_hash(data_cell);
 }
 
-int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, slice reason) inline_ref {
+int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, int reason) inline_ref {
   cell offchain_attestation_id_and_reason_cell = begin_cell()
     .store_slice(offchain_attestation_id)
-    .store_slice(reason)
+    .store_uint(reason, 256)
     .end_cell();
   cell data_cell = begin_cell()
     .store_uint(action::revoke_offchain, 32)

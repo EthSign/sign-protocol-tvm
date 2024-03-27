@@ -1,4 +1,4 @@
-(slice, slice) _attest(cell _attestation, cell _schema, slice indexing_key, int delegate_mode, slice sender_address, cell master_msg, int coins) impure {
+() _attest(cell _attestation, cell _schema, int delegate_mode, slice sender_address, cell master_msg, int coins) impure {
   load_data();
 
   if (paused) {
@@ -11,27 +11,29 @@
     int attest_timestamp, 
     int revoke_timestamp, 
     slice attester, 
+    int attester_pubkey,
     int valid_until, 
-    slice data_location, 
+    int data_location, 
     int revoked, 
     int recipients_len, 
     tuple recipients, 
-    slice _data, 
+    int _data,
     int schema_counter_id, 
     int linked_attestation_counter_id, 
     int attestation_counter_id
   ) = __get_attestation_data(_attestation);
   (
     slice registrant, 
-    int revocable, 
-    slice schema_data_location, 
+    int registrant_pubkey,
+    int revocable,
+    int schema_data_location, 
     int _max_valid_for, 
     int schema_timestamp, 
-    slice schema_data, 
+    int schema_data,
     int schema_counter_id
   ) = __get_schema_data(_schema);
  
-  if (delegate_mode & (attester.cast_to_int() == sender_address.cast_to_int())) {
+  if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
     throw(error::attestation_wrong_attester);
   }
 
@@ -51,88 +53,115 @@
     }
   }
   
-  slice attestation_address = __deploy_contract(schema_code, _schema, master_msg, coins);
+  cell c1 = begin_cell()
+    .store_uint(attester_pubkey, 256)
+    .store_uint(valid_until, 32)
+    .store_uint(data_location, 2)
+    .store_uint(revoked, 1)
+    .end_cell();
+  var c2 = begin_cell().store_uint(recipients_len, 64);
 
-  console::log_raw("ATTESTATION_MADE");
-  console::log_raw(attestation_address);
+  int i = 0;
 
-  return (schema_id, attestation_address);
+  while (i < recipients_len) {
+    c2.store_slice(recipients~tpop());
+    i = i + 1;
+  }
+
+  cell c3 = begin_cell()
+    .store_uint(_data, 256)
+    .store_uint(schema_counter_id, 64)
+    .store_uint(linked_attestation_counter_id, 64)
+    .store_uint(attestation_counter_id, 64)
+    .end_cell();
+  cell init_state = begin_cell()
+    .store_slice(schema_id)
+    .store_slice(linked_attestation_id)
+    .store_slice(attester)
+    .store_uint(attest_timestamp, 32)
+    .store_uint(revoke_timestamp, 32)
+    .store_ref(c1)
+    .store_ref(c2.end_cell())
+    .store_ref(c3)
+    .end_cell();
+
+  __deploy_contract(attestation_code, init_state, master_msg, coins);
+
+  return ();
 }
 
-slice _attest_offchain(cell offchain_attestation, slice attester, cell master_msg, int coins) impure {
+() _attest_offchain(cell offchain_attestation, slice attester, cell master_msg, int coins) impure {
   load_data();
 
   if (paused) {
     throw(error::paused);
   }
 
-  (slice attester, int attest_timestamp) = __get_offchain_attestation_data(offchain_attestation);
+  (slice attester, int attester_pubkey, int attest_timestamp) = __get_offchain_attestation_data(offchain_attestation);
 
   if (__offchain_attestation_exists(attest_timestamp)) {
     throw(error::offchain_attestation_exists);
   }
 
-  slice attestation_address = __deploy_contract(attestation_offchain_code, offchain_attestation, master_msg, coins);
+  __deploy_contract(attestation_offchain_code, offchain_attestation, master_msg, coins);
 
-  console::log_raw("OFFCHAIN_ATTESTATION_MADE");
-  console::log_raw(attestation_address);
-  
-  return attestation_address;
+  return ();
 }
 
 ;; =============== attest =============================
 
-slice attest(cell attestation, cell schema, slice indexing_key, slice delegate_signature, slice extra_data, slice sender_address) method_id {
+() attest(cell attestation, cell schema, slice delegate_signature, slice sender_address) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
 
-  (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, int recipients_len, tuple recipients, slice data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
+  (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int attester_pubkey, int valid_until, int data_location, int revoked, int recipients_len, tuple recipients, int data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
 
   if (delegate_mode) {
-    __check_delegation_signature(attester, get_delegated_attest_hash(attestation), delegate_signature);
+    __check_delegation_signature(attester_pubkey, get_delegated_attest_hash(attestation), delegate_signature);
   }
 
-  (slice schema_id, slice attestation_id) = _attest(attestation, schema, indexing_key, delegate_mode, sender_address, empty_cell(), 0);
+  _attest(attestation, schema, delegate_mode, sender_address, empty_cell(), 0);
 
-
-  return attestation_id;
+  return ();
 }
 
-slice attest_with_fees(cell attestation, cell schema, int resolver_fees, slice indexing_key, slice delegate_signature, slice extra_data, slice sender_address) method_id {
+() attest_with_fees(cell attestation, cell schema, int resolver_fees, slice delegate_signature, slice sender_address) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
 
-  (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, int recipients_len, tuple recipients, slice data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
+  (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int attester_pubkey, int valid_until, int data_location, int revoked, int recipients_len, tuple recipients, int data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
 
   if (delegate_mode) {
-    __check_delegation_signature(attester, get_delegated_attest_hash(attestation), delegate_signature);
+    __check_delegation_signature(attester_pubkey, get_delegated_attest_hash(attestation), delegate_signature);
   }
 
-  (schema_id, slice attestation_id) = _attest(attestation, schema, indexing_key, delegate_mode, sender_address, empty_cell(), resolver_fees);
+  _attest(attestation, schema, delegate_mode, sender_address, empty_cell(), resolver_fees);
 
-  return attestation_id;
+  return ();
 }
 
-slice attest_offchain(slice offchain_attestation_id, cell offchain_attestation, slice delegate_attester, slice delegate_signature, slice sender_address) method_id {
+() attest_offchain(slice offchain_attestation_id, cell offchain_attestation, slice delegate_attester, slice delegate_signature, slice sender_address) impure {
   slice attester = sender_address;
 
   if (~(delegate_signature.slice_empty?())) {
-    __check_delegation_signature(delegate_attester, get_delegated_offchain_attest_hash(offchain_attestation_id), delegate_signature);
+    (slice attester, int attester_pubkey, int attest_timestamp) = __get_offchain_attestation_data(offchain_attestation);
+    __check_delegation_signature(attester_pubkey, get_delegated_offchain_attest_hash(offchain_attestation_id), delegate_signature);
 
     attester = delegate_attester;
   }
 
-  return _attest_offchain(offchain_attestation, attester, empty_cell(), 0);
+  _attest_offchain(offchain_attestation, attester, empty_cell(), 0);
+
+  return ();
 }
 
 ;; =============== attest_batch =============================
 
-tuple attest_batch(tuple attestations, tuple schemas, tuple indexing_keys, slice delegate_signature, slice extra_data, slice sender_address) method_id {
+() attest_batch(tuple attestations, tuple schemas, slice delegate_signature, slice sender_address) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
-  tuple attestation_ids = empty_tuple();
   cell first_attestation = attestations~tpop();
-  (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _valid_until, slice _data_location, int _revoked, int _recipients_len, tuple _recipients, slice _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id) = __get_attestation_data(first_attestation);
+  (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, int _recipients_len, tuple _recipients, int _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id) = __get_attestation_data(first_attestation);
 
   if (delegate_mode) {
-    __check_delegation_signature(_attester, get_delegated_attest_batch_hash(attestations, attestations.tlen()), delegate_signature);
+    __check_delegation_signature(_attester_pubkey, get_delegated_attest_batch_hash(attestations, attestations.tlen()), delegate_signature);
   }
 
   if (~(cell::is_empty(first_attestation))) {
@@ -144,29 +173,27 @@ tuple attest_batch(tuple attestations, tuple schemas, tuple indexing_keys, slice
   while (i > 0) {
     cell attestation = attestations~tpop();
 
-    (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, int recipients_len, tuple recipients, slice data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
+    (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int attester_pubkey, int valid_until, int data_location, int revoked, int recipients_len, tuple recipients, int data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
 
     if (delegate_mode & ~(equal_slices(attester, _attester))) {
       throw(error::attestation_wrong_attester);
     }
 
-    (schema_id, slice attestation_id) = _attest(attestation, schemas~tpop(), indexing_keys~tpop(), delegate_mode, sender_address, empty_cell(), 0);
+    _attest(attestation, schemas~tpop(), delegate_mode, sender_address, empty_cell(), 0);
 
-    attestation_ids~tpush(attestation_id);
     i = i - 1;
   }
 
-  return attestation_ids;
+  return ();
 }
 
-tuple attest_batch_with_fees(tuple attestations, tuple schemas, tuple resolver_fees, tuple indexing_keys, slice delegate_signature, slice extra_data, slice sender_address) method_id {
+() attest_batch_with_fees(tuple attestations, tuple schemas, tuple resolver_fees, slice delegate_signature, slice sender_address) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
-  tuple attestation_ids = empty_tuple();
   cell first_attestation = attestations~tpop();
-  (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _valid_until, slice _data_location, int _revoked, int _recipients_len, tuple _recipients, slice _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id) = __get_attestation_data(first_attestation);
+  (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, int _recipients_len, tuple _recipients, int _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id) = __get_attestation_data(first_attestation);
 
   if (delegate_mode) {
-    __check_delegation_signature(_attester, get_delegated_attest_batch_hash(attestations, attestations.tlen()), delegate_signature);
+    __check_delegation_signature(_attester_pubkey, get_delegated_attest_batch_hash(attestations, attestations.tlen()), delegate_signature);
   }
 
   if (~(cell::is_empty(first_attestation))) {
@@ -178,41 +205,40 @@ tuple attest_batch_with_fees(tuple attestations, tuple schemas, tuple resolver_f
   while (i > 0) {
     cell attestation = attestations~tpop();
 
-    (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int valid_until, slice data_location, int revoked, int recipients_len, tuple recipients, slice data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
+    (slice schema_id, slice linked_attestation_id, int attest_timestamp, int revoke_timestamp, slice attester, int attester_pubkey, int valid_until, int data_location, int revoked, int recipients_len, tuple recipients, int data, int schema_counter_id, int linked_attestation_counter_id, int attestation_counter_id) = __get_attestation_data(attestation);
 
     if (delegate_mode & ~(equal_slices(attester, _attester))) {
       throw(error::attestation_wrong_attester);
     }
 
-    (schema_id, slice attestation_id) = _attest(attestation, schemas~tpop(), indexing_keys~tpop(), delegate_mode, sender_address, empty_cell(), resolver_fees~tpop());
+    _attest(attestation, schemas~tpop(), delegate_mode, sender_address, empty_cell(), resolver_fees~tpop());
 
-    attestation_ids~tpush(attestation_id);
     i = i - 1;
   }
 
-  return attestation_ids;
+  return ();
 }
 
-tuple attest_offchain_batch(tuple offchain_attestations, slice delegate_attester, slice delegate_signature, slice sender_address) method_id {
+() attest_offchain_batch(tuple offchain_attestations, slice delegate_attester, slice delegate_signature, slice sender_address) impure {
   slice attester = sender_address;
+  cell first_offchain_attestation = offchain_attestations~tpop();
 
   if (~(delegate_signature.slice_empty?())) {
-    __check_delegation_signature(delegate_attester, get_delegated_offchain_attest_batch_hash(offchain_attestations, offchain_attestations.tlen()), delegate_signature);
+    (slice attester, int attester_pubkey, int attest_timestamp) = __get_offchain_attestation_data(first_offchain_attestation);
+    __check_delegation_signature(attester_pubkey, get_delegated_offchain_attest_batch_hash(offchain_attestations, offchain_attestations.tlen()), delegate_signature);
 
     attester = delegate_attester;
   }
 
-  tuple attestation_ids = empty_tuple();
   int i = offchain_attestations.tlen();
 
   while (i > 0) {
     cell offchain_attestation = offchain_attestations~tpop();
 
-    slice attestation_id = _attest_offchain(offchain_attestation, attester, empty_cell(), 0);
+    _attest_offchain(offchain_attestation, attester, empty_cell(), 0);
 
-    attestation_ids~tpush(attestation_id);
     i = i - 1;
   }
 
-  return attestation_ids;
+  return ();
 }

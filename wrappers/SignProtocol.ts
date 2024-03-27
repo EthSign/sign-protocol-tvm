@@ -7,13 +7,15 @@ import {
   ContractProvider,
   Sender,
   SendMode,
-  Slice,
+  toNano,
 } from '@ton/core';
-import { OP_CODES } from '../utils';
+import { CodeType, intToString, OpCode, stringToInt } from '../utils';
+import { SchemaConfig, schemaConfigToCell } from './Schema';
+import { AttestationConfig, attestationConfigToCell } from './Attestation';
 
 export type SignProtocolConfig = {
-  version: number;
-  adminAddress: Slice;
+  version: string;
+  adminAddress: Address;
   paused: boolean;
   schemaCounter: number;
   attestationCounter: number;
@@ -39,8 +41,8 @@ export function signProtocolConfigToCell(config: SignProtocolConfig): Cell {
   } = config;
 
   return beginCell()
-    .storeUint(version, 64)
-    .storeSlice(adminAddress)
+    .storeUint(stringToInt(version), 64)
+    .storeAddress(adminAddress)
     .storeUint(Number(paused), 1)
     .storeUint(schemaCounter, 64)
     .storeUint(attestationCounter, 64)
@@ -76,9 +78,10 @@ export class SignProtocol implements Contract {
     });
   }
 
-  async getVersion(provider: ContractProvider): Promise<number> {
+  async getVersion(provider: ContractProvider): Promise<string> {
     const result = await provider.get('get_version', []);
-    return Number(result.stack.readBigNumber());
+
+    return intToString(Number(result.stack.readBigNumber()));
   }
 
   async getPaused(provider: ContractProvider): Promise<boolean> {
@@ -96,16 +99,155 @@ export class SignProtocol implements Contract {
     return Number(result.stack.readBigNumber());
   }
 
-  async getChangePause(provider: ContractProvider, via: Sender, paused: boolean) {
+  async sendChangeAdmin(provider: ContractProvider, via: Sender, newAdmin: Address) {
     const messageBody = beginCell()
       .storeUint(0, 4)
-      .storeUint(OP_CODES.ChangePaused, 32)
+      .storeUint(OpCode.ChangeAdmin, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeAddress(newAdmin)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.01',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendChangeCode(provider: ContractProvider, via: Sender, codeType: CodeType, newCode: Cell) {
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.ChangeCode, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeUint(codeType, 32)
+      .storeRef(newCode)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.01',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendChangePause(provider: ContractProvider, via: Sender, paused: boolean) {
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.ChangePaused, 32)
       .storeUint(0, 64)
       .storeAddress(via.address)
       .storeUint(Number(paused), 1)
       .endCell();
     const result = await provider.internal(via, {
       value: '0.01',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendChangeVersion(provider: ContractProvider, via: Sender, version: string) {
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.ChangeVersion, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeUint(stringToInt(version), 64)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.01',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendWithdraw(provider: ContractProvider, via: Sender, amount: string) {
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.Withdraw, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeCoins(toNano(amount))
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.01',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendRegisterSchema(provider: ContractProvider, via: Sender, schema: SchemaConfig, signature: Uint8Array) {
+    const schemaCell = schemaConfigToCell(schema);
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.Register, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeBuffer(Buffer.from(signature), 64)
+      .storeRef(schemaCell)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.02',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendAttest(
+    provider: ContractProvider,
+    via: Sender,
+    attestation: AttestationConfig,
+    schema: SchemaConfig,
+    signature: Uint8Array,
+  ) {
+    const schemaCell = schemaConfigToCell(schema);
+    const attestCell = attestationConfigToCell(attestation);
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.Attest, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeBuffer(Buffer.from(signature), 64)
+      .storeRef(attestCell)
+      .storeRef(schemaCell)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.02',
+      body: messageBody,
+    });
+
+    return result;
+  }
+
+  async sendRevokeAttestation(
+    provider: ContractProvider,
+    via: Sender,
+    attestationId: Address,
+    attestation: AttestationConfig,
+    schema: SchemaConfig,
+    signature: Uint8Array,
+    reason: string,
+  ) {
+    const schemaCell = schemaConfigToCell(schema);
+    const attestCell = attestationConfigToCell(attestation);
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.Revoke, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeBuffer(Buffer.from(signature), 64)
+      .storeAddress(attestationId)
+      .storeRef(attestCell)
+      .storeRef(schemaCell)
+      .storeUint(stringToInt(reason), 256)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.02',
       body: messageBody,
     });
 

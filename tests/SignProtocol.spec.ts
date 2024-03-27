@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, beginCell } from '@ton/core';
+import { Cell, toNano, Address } from '@ton/core';
 import { SignProtocol } from '../wrappers/SignProtocol';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -24,8 +24,8 @@ describe('SignProtocol', () => {
     signProtocol = blockchain.openContract(
       SignProtocol.createFromConfig(
         {
-          adminAddress: beginCell().endCell().asSlice(),
-          version: 1,
+          adminAddress: Address.parse(''),
+          version: '1.0.0',
           paused: false,
           schemaCounter: 0,
           attestationCounter: 0,

@@ -1,5 +1,5 @@
 export * from './constants';
 export * from './date.utils';
+export * from './hash.utils';
 export * from './sign.utils';
-export * from './string.utils';
-export * from './tonProof';
+export * from './ton.utils';

@@ -1,29 +1,20 @@
-import {
-  Address,
-  beginCell,
-  Cell,
-  Contract,
-  contractAddress,
-  ContractProvider,
-  Sender,
-  SendMode,
-  Slice,
-} from '@ton/core';
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import { bufferToInt, dateToUnixTimestamp, intToBuffer, unixTimestampToDate } from '../utils';
 
 export type AttestationOffchainConfig = {
-  attester: Slice;
-  timestamp: number;
-};
-
-export type AttestationOffchainData = {
-  attester: string;
-  timestamp: number;
+  attester: Address;
+  attesterPubKey: Buffer;
+  timestamp: Date;
 };
 
 export function attestationOffchainConfigToCell(config: AttestationOffchainConfig): Cell {
-  const { attester, timestamp } = config;
+  const { attester, attesterPubKey, timestamp } = config;
 
-  return beginCell().storeSlice(attester).storeUint(timestamp, 64).endCell();
+  return beginCell()
+    .storeAddress(attester)
+    .storeUint(bufferToInt(attesterPubKey), 256)
+    .storeUint(dateToUnixTimestamp(timestamp), 32)
+    .endCell();
 }
 
 export class AttestationOffchain implements Contract {
@@ -50,13 +41,14 @@ export class AttestationOffchain implements Contract {
     });
   }
 
-  async getOffchainAttestationData(provider: ContractProvider): Promise<AttestationOffchainData> {
+  async getOffchainAttestationData(provider: ContractProvider): Promise<AttestationOffchainConfig> {
     const result = await provider.get('get_offchain_attestation_data', []);
     let cellHash = result.stack.readCell().beginParse();
 
     return {
-      attester: cellHash.loadAddress().toString(),
-      timestamp: cellHash.loadUint(64),
+      attester: cellHash.loadAddress(),
+      attesterPubKey: intToBuffer(cellHash.loadUint(256)),
+      timestamp: unixTimestampToDate(cellHash.loadUint(32)),
     };
   }
 }

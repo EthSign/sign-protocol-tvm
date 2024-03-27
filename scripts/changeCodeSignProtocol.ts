@@ -1,15 +1,14 @@
 import { Address } from '@ton/core';
 import { SignProtocol } from '../wrappers';
-import { NetworkProvider } from '@ton/blueprint';
+import { NetworkProvider, compile } from '@ton/blueprint';
+import { CodeType } from '../utils';
 
 export async function run(provider: NetworkProvider) {
   const signProtocol = provider.open(
     SignProtocol.createFromAddress(Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '')),
   );
 
-  const pause = await signProtocol.getPaused();
+  console.log('Updating SP Code', process.env.SIGN_PROTOCOL_ADDRESS);
 
-  console.log('Current Pause', pause);
-
-  await signProtocol.sendChangePause(provider.sender(), !pause);
+  await signProtocol.sendChangeCode(provider.sender(), CodeType.SP, await compile('SignProtocol'));
 }

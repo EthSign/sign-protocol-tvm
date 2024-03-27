@@ -7,9 +7,9 @@ export async function run(provider: NetworkProvider) {
     SignProtocol.createFromAddress(Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '')),
   );
 
-  const pause = await signProtocol.getPaused();
+  const version = await signProtocol.getVersion();
 
-  console.log('Current Pause', pause);
+  console.log('Current Version', version);
 
-  await signProtocol.sendChangePause(provider.sender(), !pause);
+  await signProtocol.sendChangeVersion(provider.sender(), '1.0.0');
 }

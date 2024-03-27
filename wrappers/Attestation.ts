@@ -1,47 +1,29 @@
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
 import {
-  Address,
-  beginCell,
-  Cell,
-  Contract,
-  contractAddress,
-  ContractProvider,
-  Sender,
-  SendMode,
-  Slice,
-} from '@ton/core';
+  bufferToInt,
+  DataLocation,
+  dateToUnixTimestamp,
+  intToBuffer,
+  intToString,
+  stringToInt,
+  stringToSlice,
+  unixTimestampToDate,
+} from '../utils';
 
 export type AttestationConfig = {
-  schemaId: Slice;
-  linkedAttestationId: Slice;
-  attestTimestamp: number;
-  revokeTimestamp: number;
-  attester: Slice;
-  validUntil: number;
-  dataLocation: Slice;
-  revoked: number;
-  recipientsLen: number;
-  recipients: Slice;
-  data: Slice;
-  schemaCounterId: number;
-  linkedAttestationCounterId: number;
-  attestationCounterId: number;
-  attestationCode: Cell;
-};
-
-export type AttestationData = {
-  schemaId: string;
-  linkedAttestationId: string;
-  attestTimestamp: number;
-  revokeTimestamp: number;
-  attester: string;
-  validUntil: number;
-  dataLocation: string;
-  revoked: boolean;
-  recipientsLen: number;
-  recipients: string[];
+  schemaId: Address;
+  linkedAttestationId?: Address;
+  attestTimestamp: Date;
+  revokeTimestamp?: Date;
+  attester: Address;
+  attesterPubKey: Buffer;
+  validUntil: Date;
+  dataLocation: DataLocation;
+  revoked?: boolean;
+  recipients: Address[];
   data: string;
   schemaCounterId: number;
-  linkedAttestationCounterId: number;
+  linkedAttestationCounterId?: number;
   attestationCounterId: number;
 };
 
@@ -52,40 +34,47 @@ export function attestationConfigToCell(config: AttestationConfig): Cell {
     attestTimestamp,
     revokeTimestamp,
     attester,
+    attesterPubKey,
     validUntil,
     dataLocation,
     revoked,
-    recipientsLen,
     recipients,
     data,
     schemaCounterId,
     linkedAttestationCounterId,
     attestationCounterId,
-    attestationCode,
   } = config;
 
-  const initState = beginCell()
-    .storeSlice(schemaId)
-    .storeSlice(linkedAttestationId)
-    .storeUint(attestTimestamp, 64)
-    .storeUint(revokeTimestamp, 64)
-    .storeSlice(attester)
-    .storeUint(validUntil, 64)
-    .storeSlice(dataLocation)
-    .storeUint(revoked, 1)
-    .storeUint(recipientsLen, 64);
+  const c1 = beginCell()
+    .storeUint(bufferToInt(attesterPubKey), 256)
+    .storeUint(dateToUnixTimestamp(validUntil), 32)
+    .storeUint(dataLocation, 2)
+    .storeUint(Number(!!revoked), 1)
+    .endCell();
+  const c2 = beginCell().storeUint(recipients.length, 64);
 
-  Array.from({ length: recipientsLen }).forEach(() => {
-    initState.storeSlice(recipients);
+  recipients.map((recipient) => {
+    c2.storeAddress(recipient);
   });
 
-  return initState
-    .storeSlice(data)
+  const c3 = beginCell()
+    .storeUint(stringToInt(data), 256)
     .storeUint(schemaCounterId, 64)
-    .storeUint(linkedAttestationCounterId, 64)
+    .storeMaybeUint(linkedAttestationCounterId, 64)
     .storeUint(attestationCounterId, 64)
-    .storeRef(attestationCode)
     .endCell();
+  const initState = beginCell()
+    .storeAddress(schemaId)
+    .storeAddress(linkedAttestationId)
+    .storeAddress(attester)
+    .storeUint(dateToUnixTimestamp(attestTimestamp), 32)
+    .storeMaybeUint(revokeTimestamp ? dateToUnixTimestamp(revokeTimestamp) : 0, 32)
+    .storeRef(c1)
+    .storeRef(c2.endCell())
+    .storeRef(c3)
+    .endCell();
+
+  return initState;
 }
 
 export class Attestation implements Contract {
@@ -112,42 +101,48 @@ export class Attestation implements Contract {
     });
   }
 
-  async getAttestationData(provider: ContractProvider): Promise<AttestationData> {
+  async getAttestationData(provider: ContractProvider): Promise<AttestationConfig> {
     const result = await provider.get('get_attestation_data', []);
     let cellHash = result.stack.readCell().beginParse();
 
     const schemaId = cellHash.loadAddress();
     const linkedAttestationId = cellHash.loadAddress();
-    const attestTimestamp = cellHash.loadUint(64);
-    const revokeTimestamp = cellHash.loadUint(64);
     const attester = cellHash.loadAddress();
-    const validUntil = cellHash.loadUint(64);
-    const dataLocation = cellHash.loadStringRefTail();
-    const revoked = cellHash.loadUint(1);
-    const recipientsLen = cellHash.loadUint(64);
+    const attestTimestamp = cellHash.loadUint(32);
+    const revokeTimestamp = cellHash.loadUint(32);
+
+    const c1 = cellHash.loadRef().beginParse();
+    const attesterPubKey = intToBuffer(c1.loadUint(256));
+    const validUntil = c1.loadUint(32);
+    const dataLocation = c1.loadUint(2) as DataLocation;
+    const revoked = c1.loadUint(1);
+
+    const c2 = cellHash.loadRef().beginParse();
+    const recipientsLen = c2.loadUint(64);
     const recipients: Address[] = [];
 
     Array.from({ length: recipientsLen }).forEach(() => {
-      recipients.push(cellHash.loadAddress());
+      recipients.push(c2.loadAddress());
     });
 
-    const data = cellHash.loadAddress();
-    const schemaCounterId = cellHash.loadUint(64);
-    const linkedAttestationCounterId = cellHash.loadUint(64);
-    const attestationCounterId = cellHash.loadUint(64);
+    const c3 = cellHash.loadRef().beginParse();
+    const data = intToString(c3.loadUint(256));
+    const schemaCounterId = c3.loadUint(64);
+    const linkedAttestationCounterId = c3.loadUint(64);
+    const attestationCounterId = c3.loadUint(64);
 
     return {
-      schemaId: schemaId.toString(),
-      linkedAttestationId: linkedAttestationId.toString(),
-      attestTimestamp,
-      revokeTimestamp,
-      attester: attester.toString(),
-      validUntil,
-      dataLocation: dataLocation.toString(),
+      schemaId,
+      linkedAttestationId,
+      attestTimestamp: unixTimestampToDate(attestTimestamp),
+      revokeTimestamp: unixTimestampToDate(revokeTimestamp),
+      attester,
+      attesterPubKey,
+      validUntil: unixTimestampToDate(validUntil),
+      dataLocation: dataLocation.toString() as unknown as DataLocation,
       revoked: !!revoked,
-      recipientsLen,
-      recipients: recipients.map((recipient) => recipient.toString()),
-      data: data.toString(),
+      recipients: recipients.map((recipient) => recipient),
+      data,
       schemaCounterId,
       linkedAttestationCounterId,
       attestationCounterId,
