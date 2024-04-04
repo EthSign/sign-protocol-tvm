@@ -32,10 +32,10 @@ export async function run(provider: NetworkProvider) {
   console.log('Attestation', attestation);
   console.log('Schema', schemaData);
 
-  // await signProtocol.sendAttest(provider.sender(), attestation, schemaData, signature);
+  await signProtocol.sendAttest(provider.sender(), attestation, schemaData, signature);
 
   // with resolver fees
-  await signProtocol.sendAttest(provider.sender(), attestation, schemaData, signature, toNano(0.5));
+  // await signProtocol.sendAttest(provider.sender(), attestation, schemaData, signature, toNano(0.5));
 
   // debug
   // const contractAddress = Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '');

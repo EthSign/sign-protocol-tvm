@@ -42,16 +42,6 @@ export async function run(provider: NetworkProvider) {
 
   // await attestation.sendRevokeAttestation(provider.sender(), schemaData);
 
-  // await signProtocol.sendRevokeAttestation(
-  //   provider.sender(),
-  //   attestationAddress,
-  //   attestationData,
-  //   schemaData,
-  //   signature,
-  //   reason,
-  // );
-
-  // with resolver fees
   await signProtocol.sendRevokeAttestation(
     provider.sender(),
     attestationAddress,
@@ -59,8 +49,18 @@ export async function run(provider: NetworkProvider) {
     schemaData,
     signature,
     reason,
-    toNano(0.5),
   );
+
+  // with resolver fees
+  // await signProtocol.sendRevokeAttestation(
+  //   provider.sender(),
+  //   attestationAddress,
+  //   attestationData,
+  //   schemaData,
+  //   signature,
+  //   reason,
+  //   toNano(0.5),
+  // );
 
   // debug
   // const contractAddress = Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '');
