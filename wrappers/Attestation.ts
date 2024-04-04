@@ -5,10 +5,11 @@ import {
   dateToUnixTimestamp,
   intToBuffer,
   intToString,
+  OpCode,
   stringToInt,
-  stringToSlice,
   unixTimestampToDate,
 } from '../utils';
+import { SchemaConfig, schemaConfigToCell } from './Schema';
 
 export type AttestationConfig = {
   schemaId: Address;
@@ -30,9 +31,9 @@ export type AttestationConfig = {
 export function attestationConfigToCell(config: AttestationConfig): Cell {
   const {
     schemaId,
-    linkedAttestationId,
+    linkedAttestationId = null,
     attestTimestamp,
-    revokeTimestamp,
+    revokeTimestamp = null,
     attester,
     attesterPubKey,
     validUntil,
@@ -41,26 +42,20 @@ export function attestationConfigToCell(config: AttestationConfig): Cell {
     recipients,
     data,
     schemaCounterId,
-    linkedAttestationCounterId,
+    linkedAttestationCounterId = 0,
     attestationCounterId,
   } = config;
 
-  const c1 = beginCell()
-    .storeUint(bufferToInt(attesterPubKey), 256)
-    .storeUint(dateToUnixTimestamp(validUntil), 32)
-    .storeUint(dataLocation, 2)
-    .storeUint(Number(!!revoked), 1)
-    .endCell();
-  const c2 = beginCell().storeUint(recipients.length, 64);
+  const c3 = beginCell().storeUint(recipients.length, 64);
 
   recipients.map((recipient) => {
-    c2.storeAddress(recipient);
+    c3.storeAddress(recipient);
   });
 
-  const c3 = beginCell()
+  const c2 = beginCell()
     .storeUint(stringToInt(data), 256)
     .storeUint(schemaCounterId, 64)
-    .storeMaybeUint(linkedAttestationCounterId, 64)
+    .storeUint(linkedAttestationCounterId, 64)
     .storeUint(attestationCounterId, 64)
     .endCell();
   const initState = beginCell()
@@ -68,10 +63,13 @@ export function attestationConfigToCell(config: AttestationConfig): Cell {
     .storeAddress(linkedAttestationId)
     .storeAddress(attester)
     .storeUint(dateToUnixTimestamp(attestTimestamp), 32)
-    .storeMaybeUint(revokeTimestamp ? dateToUnixTimestamp(revokeTimestamp) : 0, 32)
-    .storeRef(c1)
-    .storeRef(c2.endCell())
-    .storeRef(c3)
+    .storeUint(revokeTimestamp ? dateToUnixTimestamp(revokeTimestamp) : 0, 32)
+    .storeUint(bufferToInt(attesterPubKey), 256)
+    .storeUint(dateToUnixTimestamp(validUntil), 32)
+    .storeUint(dataLocation, 2)
+    .storeUint(Number(!!revoked), 1)
+    .storeRef(c2)
+    .storeRef(c3.endCell())
     .endCell();
 
   return initState;
@@ -106,30 +104,28 @@ export class Attestation implements Contract {
     let cellHash = result.stack.readCell().beginParse();
 
     const schemaId = cellHash.loadAddress();
-    const linkedAttestationId = cellHash.loadAddress();
+    const linkedAttestationId = cellHash.loadAddressAny() as Address;
     const attester = cellHash.loadAddress();
     const attestTimestamp = cellHash.loadUint(32);
     const revokeTimestamp = cellHash.loadUint(32);
-
-    const c1 = cellHash.loadRef().beginParse();
-    const attesterPubKey = intToBuffer(c1.loadUint(256));
-    const validUntil = c1.loadUint(32);
-    const dataLocation = c1.loadUint(2) as DataLocation;
-    const revoked = c1.loadUint(1);
+    const attesterPubKey = intToBuffer(cellHash.loadUint(256));
+    const validUntil = cellHash.loadUint(32);
+    const dataLocation = cellHash.loadUint(2) as DataLocation;
+    const revoked = cellHash.loadUint(1);
 
     const c2 = cellHash.loadRef().beginParse();
-    const recipientsLen = c2.loadUint(64);
+    const data = intToString(c2.loadUint(256));
+    const schemaCounterId = c2.loadUint(64);
+    const linkedAttestationCounterId = c2.loadUint(64);
+    const attestationCounterId = c2.loadUint(64);
+
+    const c3 = cellHash.loadRef().beginParse();
+    const recipientsLen = c3.loadUint(64);
     const recipients: Address[] = [];
 
     Array.from({ length: recipientsLen }).forEach(() => {
-      recipients.push(c2.loadAddress());
+      recipients.push(c3.loadAddress());
     });
-
-    const c3 = cellHash.loadRef().beginParse();
-    const data = intToString(c3.loadUint(256));
-    const schemaCounterId = c3.loadUint(64);
-    const linkedAttestationCounterId = c3.loadUint(64);
-    const attestationCounterId = c3.loadUint(64);
 
     return {
       schemaId,
@@ -141,11 +137,28 @@ export class Attestation implements Contract {
       validUntil: unixTimestampToDate(validUntil),
       dataLocation: dataLocation.toString() as unknown as DataLocation,
       revoked: !!revoked,
-      recipients: recipients.map((recipient) => recipient),
       data,
       schemaCounterId,
       linkedAttestationCounterId,
       attestationCounterId,
+      recipients: recipients.map((recipient) => recipient),
     };
+  }
+
+  async sendRevokeAttestation(provider: ContractProvider, via: Sender, schema: SchemaConfig) {
+    const schemaCell = schemaConfigToCell(schema);
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.RevokeAttestation, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeRef(schemaCell)
+      .endCell();
+    const result = await provider.internal(via, {
+      value: '0.02',
+      body: messageBody,
+    });
+
+    return result;
   }
 }

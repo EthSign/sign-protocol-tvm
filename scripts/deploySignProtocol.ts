@@ -25,7 +25,7 @@ export async function run(provider: NetworkProvider) {
     ),
   );
 
-  await signProtocol.sendDeploy(provider.sender(), toNano('0.02'));
+  await signProtocol.sendDeploy(provider.sender(), toNano('0.1'));
 
   await provider.waitForDeploy(signProtocol.address);
 

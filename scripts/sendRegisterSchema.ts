@@ -1,18 +1,8 @@
-import { Address, Cell, beginCell, storeCurrencyCollection, toNano } from '@ton/core';
-import { SchemaConfig, SignProtocol, schemaConfigToCell } from '../wrappers';
-import { NetworkProvider, compile } from '@ton/blueprint';
-import {
-  DataLocation,
-  OpCode,
-  bufferToInt,
-  getContractAddress,
-  getRegisterHashCell,
-  intToBuffer,
-  signCell,
-} from '../utils';
+import { Address } from '@ton/core';
+import { SchemaConfig, SignProtocol } from '../wrappers';
+import { NetworkProvider } from '@ton/blueprint';
+import { DataLocation, getRegisterHashCell, signCell } from '../utils';
 import { mnemonicToWalletKey } from 'ton-crypto';
-import { SmartContract, internal } from 'ton-contract-executor';
-import { TonClient } from '@ton/ton';
 
 export async function run(provider: NetworkProvider) {
   const signProtocol = provider.open(
@@ -26,13 +16,13 @@ export async function run(provider: NetworkProvider) {
     timestamp: new Date(),
     registrant: Address.parse(process.env.ADMIN_ADDRESS ?? ''),
     registrantPubKey: keyPair.publicKey,
-    revocable: false,
+    revocable: true,
     schemaCounterId: await signProtocol.getSchemaCounter(),
   };
   const cellToSign = getRegisterHashCell(schema);
   const { signature } = await signCell(cellToSign, process.env.WALLET_MNEMONIC ?? '');
 
-  console.log('Schema Id', schema);
+  console.log('Schema', schema);
 
   await signProtocol.sendRegisterSchema(provider.sender(), schema, signature);
 

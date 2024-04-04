@@ -5,6 +5,7 @@
 #include "imports/stdlib.fc";
 #include "imports/constants.fc";
 #include "imports/utils.fc";
+#include "imports/definitions_helpers.fc";
 #include "imports/definitions.fc";
 
 #include "operations/hash_ops.fc";
@@ -177,14 +178,67 @@
     return ();
   }
   
-  if (op == op::revoke) {
+  if (op == op::attest_with_fees) {
     var signature = in_msg~load_bits(512);
-    slice attestation_id = in_msg~load_msg_addr();
     cell attestation = in_msg~load_ref();
     cell schema = in_msg~load_ref();
-    int reason = in_msg~load_uint(256);
+    (in_msg, int fees) = load_coins(in_msg);
+
+    attest_with_fees(attestation, schema, fees, signature, sender_address);
+
+    return ();
+  }
+  
+  if (op == op::attest_offchain) {
+    var signature = in_msg~load_bits(512);
+    cell offchain_attestation = in_msg~load_ref();
+
+    var c1 = in_msg~load_ref().begin_parse();
+    slice delegate_attester = c1~load_msg_addr();
+
+    attest_offchain(offchain_attestation, delegate_attester, signature, sender_address);
+
+    return ();
+  }
+  
+  if (op == op::revoke) {
+    var signature = in_msg~load_bits(512);
+    slice ds = in_msg~load_ref().begin_parse();
+    slice attestation_id = ds~load_msg_addr();
+    int reason = ds~load_uint(256);
+
+    cell attestation = in_msg~load_ref();
+    cell schema = in_msg~load_ref();
 
     revoke(attestation_id, attestation, schema,  reason, signature, sender_address);
+
+    return ();
+  }
+  
+  if (op == op::revoke_with_fees) {
+    var signature = in_msg~load_bits(512);
+    slice ds = in_msg~load_ref().begin_parse();
+    slice attestation_id = ds~load_msg_addr();
+    int reason = ds~load_uint(256);
+
+    cell attestation = in_msg~load_ref();
+    cell schema = in_msg~load_ref();
+    (in_msg, int fees) = load_coins(in_msg);
+
+    revoke_with_fees(attestation_id, attestation, schema,  reason, fees, signature, sender_address);
+
+    return ();
+  }
+  
+  if (op == op::revoke_offchain) {
+    var signature = in_msg~load_bits(512);
+    slice ds = in_msg~load_ref().begin_parse();
+    slice attestation_id = ds~load_msg_addr();
+    int reason = ds~load_uint(256);
+
+    cell attestation = in_msg~load_ref();
+
+    revoke_offchain(attestation_id, attestation, reason, signature, sender_address);
 
     return ();
   }

@@ -18,6 +18,7 @@ export enum OpCode {
   RevokeBatchWithFees = 1718208763, // 0x6666666b
   RevokeOffchain = 1900840713, // 0x71717169
   RevokeOffchainBatch = 627024976, // 0x25252530
+  RevokeAttestation = 1855247948, // 0x6f6f6f6c
 }
 
 export enum CodeType {

@@ -1,4 +1,4 @@
-import { Address, BitString, Cell, Slice, beginCell, contractAddress } from '@ton/core';
+import { Address, BitString, Cell, Slice, beginCell, contractAddress, crc32c } from '@ton/core';
 
 export function stringToSlice(str: string): Slice {
   return beginCell().storeStringTail(str).endCell().asSlice();
@@ -51,6 +51,10 @@ export function stringToCell(str: string): Cell {
 
 export function cellToString(cell: Cell): string {
   return cell.beginParse().loadStringTail();
+}
+
+export function stringToCrc32(str: string): number {
+  return crc32c(Buffer.from(str)).readUint32BE();
 }
 
 export function getContractAddress(code: Cell, data: Cell): Address {

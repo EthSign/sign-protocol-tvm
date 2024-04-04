@@ -34,10 +34,10 @@ int get_delegated_attest_batch_hash(tuple attestations, int attestations_len) in
   return cell_hash(data_cell);
 }
 
-int get_delegated_offchain_attest_hash(slice offchain_attestation_id) inline_ref {
+int get_delegated_offchain_attest_hash(cell offchain_attestation) inline_ref {
   cell data_cell = begin_cell()
     .store_uint(action::attest_offchain, 32)
-    .store_slice(offchain_attestation_id)
+    .store_ref(offchain_attestation)
     .end_cell();
 
   return cell_hash(data_cell);

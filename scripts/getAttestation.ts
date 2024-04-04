@@ -1,10 +1,8 @@
-import { Address, Cell } from '@ton/core';
-import { Attestation, Schema } from '../wrappers';
+import { Address } from '@ton/core';
+import { Attestation } from '../wrappers';
 import { NetworkProvider } from '@ton/blueprint';
-import { TonClient } from '@ton/ton';
-import { SmartContract } from 'ton-contract-executor';
 
-const ATTESTATION_ADDRESS = '0QBLcs5d-ZMY7vHez0ET7BBc8OEmiS_cb9kLhpyThqwT9EHM';
+const ATTESTATION_ADDRESS = 'kQAxXIA3EErik9ktGedskRMHKLftVZRE-rodQnWBL20qAkHe';
 
 export async function run(provider: NetworkProvider) {
   const attestation = provider.open(Attestation.createFromAddress(Address.parse(ATTESTATION_ADDRESS)));
@@ -12,7 +10,7 @@ export async function run(provider: NetworkProvider) {
   console.log('Attestation', ATTESTATION_ADDRESS, await attestation.getAttestationData());
 
   // debug
-  // const contractAddress = Address.parse(SCHEMA_ADDRESS);
+  // const contractAddress = Address.parse(ATTESTATION_ADDRESS);
   // let client = new TonClient({
   //   endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',
   // });
@@ -22,7 +20,7 @@ export async function run(provider: NetworkProvider) {
   // const signProtocolLog = await SmartContract.fromCell(code, data, {
   //   debug: true,
   // });
-  // const result = await signProtocolLog.invokeGetMethod('get_schema_data', []);
+  // const result = await signProtocolLog.invokeGetMethod('get_attestation_data', []);
 
   // console.log('Result', result.logs, result.type);
 }

@@ -12,6 +12,7 @@ import {
 import { CodeType, intToString, OpCode, stringToInt } from '../utils';
 import { SchemaConfig, schemaConfigToCell } from './Schema';
 import { AttestationConfig, attestationConfigToCell } from './Attestation';
+import { AttestationOffchainConfig, attestationOffchainConfigToCell } from './AttestationOffchain';
 
 export type SignProtocolConfig = {
   version: string;
@@ -191,7 +192,7 @@ export class SignProtocol implements Contract {
       .storeRef(schemaCell)
       .endCell();
     const result = await provider.internal(via, {
-      value: '0.02',
+      value: '0.04',
       body: messageBody,
     });
 
@@ -204,6 +205,7 @@ export class SignProtocol implements Contract {
     attestation: AttestationConfig,
     schema: SchemaConfig,
     signature: Uint8Array,
+    fees?: bigint,
   ) {
     const schemaCell = schemaConfigToCell(schema);
     const attestCell = attestationConfigToCell(attestation);
@@ -214,10 +216,40 @@ export class SignProtocol implements Contract {
       .storeAddress(via.address)
       .storeBuffer(Buffer.from(signature), 64)
       .storeRef(attestCell)
-      .storeRef(schemaCell)
-      .endCell();
+      .storeRef(schemaCell);
+
+    if (fees) {
+      messageBody.storeCoins(fees);
+    }
+
     const result = await provider.internal(via, {
-      value: '0.02',
+      value: fees || '0.04',
+      body: messageBody.endCell(),
+    });
+
+    return result;
+  }
+
+  async sendAttestOffchain(
+    provider: ContractProvider,
+    via: Sender,
+    attester: Address,
+    attestation: AttestationOffchainConfig,
+    signature: Uint8Array,
+  ) {
+    const attestCell = attestationOffchainConfigToCell(attestation);
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.Attest, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeBuffer(Buffer.from(signature), 64)
+      .storeRef(attestCell)
+      .storeRef(beginCell().storeAddress(attester).endCell())
+      .endCell();
+
+    const result = await provider.internal(via, {
+      value: '0.04',
       body: messageBody,
     });
 
@@ -232,6 +264,7 @@ export class SignProtocol implements Contract {
     schema: SchemaConfig,
     signature: Uint8Array,
     reason: string,
+    fees?: bigint,
   ) {
     const schemaCell = schemaConfigToCell(schema);
     const attestCell = attestationConfigToCell(attestation);
@@ -241,13 +274,43 @@ export class SignProtocol implements Contract {
       .storeUint(0, 64)
       .storeAddress(via.address)
       .storeBuffer(Buffer.from(signature), 64)
-      .storeAddress(attestationId)
+      .storeRef(beginCell().storeAddress(attestationId).storeUint(stringToInt(reason), 256).endCell())
       .storeRef(attestCell)
-      .storeRef(schemaCell)
-      .storeUint(stringToInt(reason), 256)
-      .endCell();
+      .storeRef(schemaCell);
+
+    if (fees) {
+      messageBody.storeCoins(fees);
+    }
+
     const result = await provider.internal(via, {
-      value: '0.02',
+      value: fees || '0.04',
+      body: messageBody.endCell(),
+    });
+
+    return result;
+  }
+
+  async sendRevokeAttestationOffchain(
+    provider: ContractProvider,
+    via: Sender,
+    attestationId: Address,
+    attestation: AttestationOffchainConfig,
+    signature: Uint8Array,
+    reason: string,
+  ) {
+    const attestCell = attestationOffchainConfigToCell(attestation);
+    const messageBody = beginCell()
+      .storeUint(0, 4)
+      .storeUint(OpCode.Revoke, 32)
+      .storeUint(0, 64)
+      .storeAddress(via.address)
+      .storeBuffer(Buffer.from(signature), 64)
+      .storeRef(beginCell().storeAddress(attestationId).storeUint(stringToInt(reason), 256).endCell())
+      .storeRef(attestCell)
+      .endCell();
+
+    const result = await provider.internal(via, {
+      value: '0.04',
       body: messageBody,
     });
 

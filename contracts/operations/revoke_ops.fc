@@ -11,7 +11,7 @@
     throw(error::attestation_nonexistent);
   }
 
-  if (delegate_mode != 1 & ~(equal_slices(attester, sender_address))) {
+  if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
     throw(error::attestation_wrong_attester);
   }
 
@@ -25,19 +25,19 @@
     throw(error::attestation_already_revoked);
   }
 
-  var msg_body = begin_cell()
-      .store_uint(op::revoke_attestation, 32)
-      .store_uint(query_id, 64)
-      .end_cell();
-
   var msg = begin_cell()
     .store_uint(0x18, 6)
     .store_slice(attestation_id)
     .store_coins(coins)
     .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-    .store_ref(msg_body);
+    .store_uint(0, 4)
+    .store_uint(op::revoke_attestation, 32)
+    .store_uint(query_id, 64)
+    .store_slice(sender_address)
+    .store_ref(schema)
+    .end_cell();
 
-  send_raw_message(msg.end_cell(), 1);
+  send_raw_message(msg, 1);
 
   return ();
 }
@@ -55,7 +55,7 @@
     throw(error::offchain_attestation_nonexistent);
   }
 
-  if (delegate_mode != 1 & equal_slices(attester, sender_address)) {
+  if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
     throw(error::attestation_wrong_attester);
   }
 
@@ -63,17 +63,14 @@
     throw(error::offchain_attestation_already_revoked);
   }
 
-  var msg_body = begin_cell()
-      .store_uint(op::revoke_attestation, 32)
-      .store_uint(query_id, 64)
-      .end_cell();
-
   var msg = begin_cell()
     .store_uint(0x18, 6)
     .store_slice(offchain_attestation_id)
-    .store_coins(0)
+    .store_coins(gas_consumption())
     .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-    .store_ref(msg_body);
+    .store_uint(0, 4)
+    .store_uint(op::revoke_attestation, 32)
+    .store_uint(query_id, 64);
 
   send_raw_message(msg.end_cell(), 1);
 
@@ -91,7 +88,7 @@
     __check_delegation_signature(attester_pubkey, get_delegated_revoke_hash(attestation_id, reason), delegate_signature);
   }
 
-  _revoke(attestation_id, attestation, schema, reason, delegate_mode, sender_address, 0, 0);
+  _revoke(attestation_id, attestation, schema, reason, delegate_mode, sender_address, 0, gas_consumption());
 }
 
 () revoke_with_fees(slice attestation_id, cell attestation, cell schema, int reason, int resolver_fees, slice delegate_signature, slice sender_address) impure {

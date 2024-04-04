@@ -1,7 +1,14 @@
 import { Address, beginCell } from '@ton/core';
-import { AttestationConfig, SchemaConfig, attestationConfigToCell, schemaConfigToCell } from '../wrappers';
+import {
+  AttestationConfig,
+  AttestationOffchainConfig,
+  SchemaConfig,
+  attestationConfigToCell,
+  attestationOffchainConfigToCell,
+  schemaConfigToCell,
+} from '../wrappers';
 import { Actions } from './constants';
-import { arraysToCell, stringToSlice } from './ton.utils';
+import { arraysToCell, stringToInt, stringToSlice } from './ton.utils';
 
 export function getRegisterHashCell(schema: SchemaConfig) {
   const schemaCell = schemaConfigToCell(schema);
@@ -31,8 +38,9 @@ export function getAttestBatchHashCell(attestations: AttestationConfig[]) {
   return dataCell;
 }
 
-export function getAttestOffchainHashCell(attestationOffchainAddress: Address) {
-  const dataCell = beginCell().storeUint(Actions.AttestOffchain, 32).storeAddress(attestationOffchainAddress).endCell();
+export function getAttestOffchainHashCell(attestationOffchain: AttestationOffchainConfig) {
+  const attestationOffchainCell = attestationOffchainConfigToCell(attestationOffchain);
+  const dataCell = beginCell().storeUint(Actions.AttestOffchain, 32).storeRef(attestationOffchainCell).endCell();
 
   return dataCell;
 }

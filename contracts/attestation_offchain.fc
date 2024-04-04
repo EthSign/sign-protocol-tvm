@@ -44,12 +44,16 @@ global int timestamp;
     return ();
   }
 
-  load_data();
-
   int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
   int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
   if (op == op::revoke_attestation) {
+    load_data();
+
+    if (timestamp == 1) {
+      throw(error::offchain_attestation_already_revoked);
+    }
+
     save_data(attester, attester_pubkey, 1);
 
     return ();

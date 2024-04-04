@@ -1,3 +1,7 @@
+int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
+int gas_consumption() asm "20000000 PUSHINT"; ;; 0.02 TON
+int master_contract_storage_fee() asm "500000 PUSHINT"; ;; 0.005 TON
+
 ;; =============== sub-contract utils =============================
 
 slice calc_address(int worckchain_id, cell state_init) {
@@ -10,4 +14,79 @@ slice calc_address(int worckchain_id, cell state_init) {
     .begin_parse();
   
   return future_address~load_msg_addr();
+}
+
+(slice, int, int, int, int, int, int, int) __get_schema_data(cell _schema) impure inline {
+  slice schema_slice = _schema.begin_parse();
+
+  slice registrant = schema_slice~load_msg_addr();
+  int registrant_pubkey = schema_slice~load_uint(256);
+  int revocable = schema_slice~load_uint(1);
+  int data_location = schema_slice~load_uint(2);
+  int max_valid_for = schema_slice~load_uint(32);
+  ;; hook = ds~load_ref(); TODO: implement hooks
+  int timestamp = schema_slice~load_uint(32);
+  int schema_counter_id = schema_slice~load_uint(64);
+
+  slice s1 = schema_slice~load_ref().begin_parse();
+  int data = s1~load_uint(256);
+
+  return (registrant, registrant_pubkey, revocable, data_location, max_valid_for, timestamp, data, schema_counter_id);
+}
+
+slice __deploy_contract (cell code, cell data, cell master_msg, int coins) impure inline {
+  cell state_init = begin_cell()
+    .store_uint(0, 1) ;; split_depth:(Maybe (## 5))
+    .store_uint(0, 1) ;; special:(Maybe TickTock)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(code)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(data)
+    .store_uint(0, 1) ;; (HashmapE 512 SimpleLib)
+    .end_cell();
+  slice address = calc_address(0, state_init);
+
+  int coins_to_send = gas_consumption() + coins - master_contract_storage_fee();
+  var msg = begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(address)
+    .store_coins(coins_to_send)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32)
+    .store_uint(1, 1)
+    .store_uint(1, 1)
+    .store_ref(state_init);
+
+  int has_master_msg = ~(equal_cells(master_msg, empty_cell()));
+
+  if (has_master_msg) {
+    msg = msg
+      .store_uint(1, 1)
+      .store_ref(master_msg);
+  } else {
+    msg = msg.store_uint(0, 1);
+  }
+  
+  send_raw_message(msg.end_cell(), 1); ;; pay transfer fees separately, revert on errors
+
+  return address;
+}
+
+cell __tuple_to_cell(tuple t) {
+  var c = begin_cell();
+  int i = t.tlen();
+
+  while (i > 0) {
+    cell e = t~tpop();
+
+    c = c.store_ref(e);
+    i = i - 1;
+  }
+
+  return c.end_cell();
+}
+
+() __check_delegation_signature(int delegate_attester, int hash, slice delegate_signature) impure inline {
+  if (check_signature(hash, delegate_signature, delegate_attester) != 0) {
+    throw(error::invalid_delegate_signature);
+  }
 }

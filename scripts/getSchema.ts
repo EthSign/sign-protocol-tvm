@@ -1,10 +1,8 @@
-import { Address, Cell } from '@ton/core';
+import { Address } from '@ton/core';
 import { Schema } from '../wrappers';
 import { NetworkProvider } from '@ton/blueprint';
-import { TonClient } from '@ton/ton';
-import { SmartContract } from 'ton-contract-executor';
 
-const SCHEMA_ADDRESS = '0QALD9iIZtk1xgmYo2Fp2sF8WlOGkYL3K-I9GTCuhENdCksQ';
+const SCHEMA_ADDRESS = 'kQAuywgroS_S07WC1RvuCECXXOB8uYrFT-w6_Mdi3kZEdqt3';
 
 export async function run(provider: NetworkProvider) {
   const schema = provider.open(Schema.createFromAddress(Address.parse(SCHEMA_ADDRESS)));

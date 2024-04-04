@@ -7,7 +7,7 @@ export async function run(provider: NetworkProvider) {
     SignProtocol.createFromAddress(Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '')),
   );
 
-  const amount = '0.19';
+  const amount = '0.43';
 
   console.log('Withdrawing', amount);
 

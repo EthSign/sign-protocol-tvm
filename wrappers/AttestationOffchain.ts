@@ -4,7 +4,7 @@ import { bufferToInt, dateToUnixTimestamp, intToBuffer, unixTimestampToDate } fr
 export type AttestationOffchainConfig = {
   attester: Address;
   attesterPubKey: Buffer;
-  timestamp: Date;
+  timestamp?: Date;
 };
 
 export function attestationOffchainConfigToCell(config: AttestationOffchainConfig): Cell {
@@ -13,7 +13,7 @@ export function attestationOffchainConfigToCell(config: AttestationOffchainConfi
   return beginCell()
     .storeAddress(attester)
     .storeUint(bufferToInt(attesterPubKey), 256)
-    .storeUint(dateToUnixTimestamp(timestamp), 32)
+    .storeUint(timestamp ? dateToUnixTimestamp(timestamp) : 0, 32)
     .endCell();
 }
 
