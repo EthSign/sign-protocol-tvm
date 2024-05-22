@@ -1,18 +1,21 @@
-import { Address, toNano } from '@ton/core';
-import { AttestationConfig, Schema, SignProtocol } from '../wrappers';
-import { NetworkProvider } from '@ton/blueprint';
-import { DataLocation, getAttestHashCell, signCell } from '../utils';
+import { Address, Cell, beginCell, toNano } from '@ton/core';
+import { AttestationConfig, Schema, SignProtocol, attestationConfigToCell, schemaConfigToCell } from '../wrappers';
+import { NetworkProvider, compile } from '@ton/blueprint';
+import { DataLocation, OpCode, getAttestHashCell, getContractAddress, signCell } from '../utils';
 import { mnemonicToWalletKey } from 'ton-crypto';
+import { TonClient } from '@ton/ton';
+import { SmartContract, internal } from 'ton-contract-executor';
 
-const SCHEMA_ADDRESS = 'kQAuywgroS_S07WC1RvuCECXXOB8uYrFT-w6_Mdi3kZEdqt3';
+const SCHEMA_ADDRESS = 'kQCFNOuU-ORHiYQ5dycFcI5icBFTO-9k0nBe0LTtuZxHRtQm';
 
 export async function run(provider: NetworkProvider) {
   const signProtocol = provider.open(
     SignProtocol.createFromAddress(Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '')),
   );
   const schema = provider.open(Schema.createFromAddress(Address.parse(SCHEMA_ADDRESS)));
-  const keyPair = await mnemonicToWalletKey((process.env.ADMIN_ADDRESS ?? '').split(' '));
+  const keyPair = await mnemonicToWalletKey((process.env.WALLET_MNEMONIC ?? '').split(' '));
   const schemaData = await schema.getSchemaData();
+  console.log('key', schemaData.registrantPubKey.toString('hex'))
   const attestation: AttestationConfig = {
     attestationCounterId: await signProtocol.getAttestationCounter(),
     attester: Address.parse(process.env.ADMIN_ADDRESS ?? ''),
@@ -21,18 +24,18 @@ export async function run(provider: NetworkProvider) {
     data: 'Test',
     dataLocation: DataLocation.ONCHAIN,
     linkedAttestationCounterId: 0,
-    recipients: [Address.parse('0QCARrT22CU-HPc4boV9LDcMb-4uA04QF_7UpkqMsDDNadUU')],
+    recipients: [Address.parse('0QCm4j6oTqRNqS8k0MIQyuqeSoAgApoXzVLX0_dYvAfD_64N')],
     schemaCounterId: schemaData.schemaCounterId,
     schemaId: Address.parse(SCHEMA_ADDRESS),
     validUntil: new Date('2024-12-12'),
   };
-  const cellToSign = getAttestHashCell(attestation);
-  const { signature } = await signCell(cellToSign, process.env.WALLET_MNEMONIC ?? '');
+  // const cellToSign = getAttestHashCell(attestation);
+  // const { signature } = await signCell(cellToSign, process.env.WALLET_MNEMONIC ?? '');
 
   console.log('Attestation', attestation);
   console.log('Schema', schemaData);
 
-  await signProtocol.sendAttest(provider.sender(), attestation, schemaData, signature);
+  await signProtocol.sendAttest(provider.sender(), attestation, schemaData);
 
   // with resolver fees
   // await signProtocol.sendAttest(provider.sender(), attestation, schemaData, signature, toNano(0.5));

@@ -1,4 +1,4 @@
-import { Address, BitString, Cell, Slice, beginCell, contractAddress, crc32c } from '@ton/core';
+import { Address, BitString, Cell, Slice, beginCell, contractAddress, crc32c, toNano } from '@ton/core';
 
 export function stringToSlice(str: string): Slice {
   return beginCell().storeStringTail(str).endCell().asSlice();
@@ -77,4 +77,8 @@ export function arraysToCell(arrays: (Slice | Cell | Address | number)[], bits =
   });
 
   return cell.endCell();
+}
+
+export function coinsToSlice(coins: string): Slice {
+  return beginCell().storeCoins(toNano(coins)).endCell().asSlice();
 }
