@@ -271,3 +271,45 @@ int get_attestation_counter() method_id {
   
   return attestation_counter;
 }
+
+slice get_schema_id(cell schema) method_id {
+  load_data();
+  cell state_init = begin_cell()
+    .store_uint(0, 1) ;; split_depth:(Maybe (## 5))
+    .store_uint(0, 1) ;; special:(Maybe TickTock)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(schema_code)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(schema)
+    .store_uint(0, 1) ;; (HashmapE 512 SimpleLib)
+    .end_cell();
+  return calc_address(0, state_init);
+}
+
+slice get_attestation_id(cell attestation) method_id {
+  load_data();
+  cell state_init = begin_cell()
+    .store_uint(0, 1) ;; split_depth:(Maybe (## 5))
+    .store_uint(0, 1) ;; special:(Maybe TickTock)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(attestation_code)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(attestation)
+    .store_uint(0, 1) ;; (HashmapE 512 SimpleLib)
+    .end_cell();
+  return calc_address(0, state_init);
+}
+
+slice get_attestation_offchain_id(cell attestation_offchain) method_id {
+  load_data();
+  cell state_init = begin_cell()
+    .store_uint(0, 1) ;; split_depth:(Maybe (## 5))
+    .store_uint(0, 1) ;; special:(Maybe TickTock)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(attestation_offchain_code)
+    .store_uint(1, 1) ;; (Maybe ^Cell)
+    .store_ref(attestation_offchain)
+    .store_uint(0, 1) ;; (HashmapE 512 SimpleLib)
+    .end_cell();
+  return calc_address(0, state_init);
+}

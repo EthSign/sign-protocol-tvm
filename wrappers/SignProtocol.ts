@@ -8,6 +8,8 @@ import {
   Sender,
   SendMode,
   toNano,
+  Tuple,
+  TupleItem,
 } from '@ton/core';
 import { CodeType, intToString, OpCode, stringToInt } from '../utils';
 import { SchemaConfig, schemaConfigToCell } from './Schema';
@@ -98,6 +100,36 @@ export class SignProtocol implements Contract {
   async getAttestationCounter(provider: ContractProvider): Promise<number> {
     const result = await provider.get('get_attestation_counter', []);
     return Number(result.stack.readBigNumber());
+  }
+
+  async getAttestationId(provider: ContractProvider, attestation: AttestationConfig): Promise<Address> {
+    const arg: TupleItem = {
+      cell: attestationConfigToCell(attestation),
+      type: 'cell',
+    }
+    const result = await provider.get('get_attestation_id', [arg]);
+    
+    return result.stack.readAddress();
+  }
+
+  async getAttestationOffchainId(provider: ContractProvider, attestationOffchain: AttestationOffchainConfig): Promise<Address> {
+    const arg: TupleItem = {
+      cell: attestationOffchainConfigToCell(attestationOffchain),
+      type: 'cell',
+    }
+    const result = await provider.get('get_attestation_offchain_id', [arg]);
+    
+    return result.stack.readAddress();
+  }
+
+  async getSchemaId(provider: ContractProvider, schema: SchemaConfig): Promise<Address> {
+    const arg: TupleItem = {
+      cell: schemaConfigToCell(schema),
+      type: 'cell',
+    }
+    const result = await provider.get('get_schema_id', [arg]);
+    
+    return result.stack.readAddress();
   }
 
   async sendChangeAdmin(provider: ContractProvider, via: Sender, newAdmin: Address) {
