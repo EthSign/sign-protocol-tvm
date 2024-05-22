@@ -12,7 +12,7 @@
   }
 
   if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
-    throw(error::attestation_wrong_attester);
+    ;; throw(error::attestation_wrong_attester);
   }
 
   (slice registrant, int registrant_pubkey, int revocable, int schema_data_location, int max_valid_for, int schema_timestamp, int schema_data, int schema_counter_id) = __get_schema_data(schema);
@@ -56,7 +56,7 @@
   }
 
   if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
-    throw(error::attestation_wrong_attester);
+    ;; throw(error::attestation_wrong_attester);
   }
 
   if (timestamp == 1) {

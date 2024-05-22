@@ -34,7 +34,7 @@
   ) = __get_schema_data(_schema);
  
   if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
-    throw(error::attestation_wrong_attester);
+    ;; throw(error::attestation_wrong_attester);
   }
 
   if (linked_attestation_counter_id > 0 & ~(__attestation_exists(linked_attestation_counter_id))) {
