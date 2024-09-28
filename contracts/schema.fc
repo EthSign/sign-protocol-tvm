@@ -1,11 +1,15 @@
 #pragma version >=0.3.0;
 
-#include "imports/stdlib.fc";
-#include "imports/constants.fc";
-#include "imports/utils.fc";
-
 #include "../node_modules/@ston-fi/funcbox/autoload.fc";
 
+#include "imports/stdlib.fc";
+#include "imports/constants.fc";
+#include "imports/definitions_helpers.fc";
+#include "imports/utils.fc";
+
+#include "operations/hash_ops.fc";
+#include "operations/helper_ops.fc";
+#include "operations/schema_ops.fc";
 ;; =============== storage =============================
 
 global slice registrant;
@@ -13,12 +17,14 @@ global int registrant_pubkey;
 global int revocable;
 global int data_location;
 global int max_valid_for;
-;; global cell hook; TODO: implement hooks
 global int timestamp;
 global int data;
 global int schema_counter_id;
+global slice sp_address;
+global cell attestation_code;
 
-;; load_data populates storage variables using stored data
+cell get_schema_data() method_id;
+
 () load_data() impure {
   var ds = get_data().begin_parse();
 
@@ -27,75 +33,165 @@ global int schema_counter_id;
   revocable = ds~load_uint(1);
   data_location = ds~load_uint(2);
   max_valid_for = ds~load_uint(32);
-  ;; hook = ds~load_ref(); TODO: implement hooks
   timestamp = ds~load_uint(32);
   schema_counter_id = ds~load_uint(64);
   
   var s1 = ds~load_ref().begin_parse();
   data = s1~load_uint(256);
+  sp_address = s1~load_msg_addr();
+  attestation_code = s1~load_ref();
 }
 
-;; save_data stores storage variables as a cell into persistent storage
-() save_data (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data, int _schema_counter_id) impure {
-  cell schema_data = begin_cell()
+;; =============== utils =============================
+
+(cell) compose_schema (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data, int _schema_counter_id, slice _sp_address, cell _attestation_code) {
+  cell schema = begin_cell()
     .store_slice(_registrant)
     .store_uint(_registrant_pubkey, 256)
     .store_uint(_revocable, 1)
     .store_uint(_data_location, 2)
     .store_uint(_max_valid_for, 32)
-    ;; .store_ref(hook) TODO: implement hooks
     .store_uint(_timestamp, 32)
     .store_uint(_schema_counter_id, 64)
     .store_ref(
       begin_cell()
         .store_uint(_data, 256)
+        .store_slice(_sp_address)
+        .store_ref(_attestation_code)
         .end_cell()
     )
     .end_cell();
 
-  set_data(schema_data);
+  return schema;
+}
+
+;; ================================================
+
+() save_data (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data, int _schema_counter_id, slice _sp_address, cell _attestation_code) impure {
+  cell schema = compose_schema(
+    _registrant,
+    _registrant_pubkey,
+    _revocable,
+    _data_location,
+    _max_valid_for,
+    _timestamp,
+    _data,
+    _schema_counter_id,
+    _sp_address,
+    _attestation_code
+  );
+
+  set_data(schema);
 }
 
 ;; =============== messages =============================
 
-() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
-    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
-      return ();
+() recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg) {
+  if (in_msg.slice_empty?()) { ;; ignore all empty messages
+    return ();
+  }
+
+  slice in_msg_full_slice = in_msg_full.begin_parse();
+  int flags = in_msg_full_slice~load_uint(4);
+  slice sender_address = in_msg_full_slice~load_msg_addr();
+
+  if (flags & 1) {
+    in_msg~skip_bits(32);  ;;0xFFFFFFFF
+
+    int bounced_op = in_msg~load_uint(32);
+    int bounced_query_id = in_msg~load_uint(64);
+  
+    return ();
+  }
+
+  int op = in_msg~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+  int query_id = in_msg~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+  if (op == op::attest) {
+    load_data();
+    throw_unless(error::unauthorized, equal_slices(sender_address, sp_address));
+
+    var signature = in_msg~load_bits(512);
+    cell attestation = in_msg~load_ref();
+    slice attester = in_msg~load_msg_addr();
+    int fees = in_msg~load_coins();
+    int attestation_counter = in_msg~load_uint(64);
+    int schema_counter = in_msg~load_uint(64);
+    int has_hook? = in_msg~load_uint(1);
+
+    attest(attestation, max_valid_for, attestation_code, fees, attestation_counter, schema_counter, signature, attester);
+
+    if (has_hook?) {
+      cell schema = get_schema_data();
+      cell body = compose_body(
+        op::call_hook_from_schema,
+        query_id,
+        begin_cell()
+          .store_ref(schema)
+          .store_ref(in_msg~load_ref())
+      );
+      
+      send_msg_with_body(1, sp_address, 0, body, 1);
     }
 
-    slice cs = in_msg_full.begin_parse();
-    int flags = cs~load_uint(4);
+    return ();
+  }
 
-    if (flags & 1) {
-      return ();
+  if (op == op::revoke) {
+    load_data();
+    throw_unless(error::unauthorized, equal_slices(sender_address, sp_address));
+
+    if (revocable != 1) {
+      throw(error::attestation_irrevocable);
     }
 
-    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
-    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+    var signature = in_msg~load_bits(512);
+    int reason = in_msg~load_uint(256);
+    slice attestation_address = in_msg~load_msg_addr();
+    slice attester = in_msg~load_msg_addr();
+    int fees = in_msg~load_coins();
+    int has_hook? = in_msg~load_uint(1);
 
-    throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
+    builder hook_body = begin_cell()
+      .store_slice(signature)
+      .store_int(reason, 256)
+      .store_slice(attester)
+      .store_coins(fees)
+      .store_int(has_hook?, 1);
+
+    if (has_hook?) {
+      hook_body.store_ref(in_msg~load_ref());
+    }
+
+    cell body = compose_body(
+      op::revoke,
+      query_id,
+      hook_body
+    );
+
+    send_msg_with_body(1, attestation_address, 0, body, 1);
+
+  }
+
+  throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
 }
 
 ;; =============== getters =============================
 
 cell get_schema_data() method_id {
   load_data();
-  
-  cell schema_data = begin_cell()
-    .store_slice(registrant)
-    .store_uint(registrant_pubkey, 256)
-    .store_uint(revocable, 1)
-    .store_uint(data_location, 2)
-    .store_uint(max_valid_for, 32)
-    ;; .store_ref(hook) TODO: implement hooks
-    .store_uint(timestamp, 32)
-    .store_uint(schema_counter_id, 64)
-    .store_ref(
-      begin_cell()
-        .store_uint(data, 256)
-        .end_cell()
-    )
-    .end_cell();
+  cell schema = compose_schema(
+    registrant,
+    registrant_pubkey,
+    revocable,
+    data_location,
+    max_valid_for,
+    timestamp,
+    data,
+    schema_counter_id,
+    sp_address,
+    attestation_code
+  );
 
-  return schema_data;
+  return schema;
 }

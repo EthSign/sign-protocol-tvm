@@ -1,6 +1,6 @@
 import { Address } from '@ton/core';
 import { SchemaConfig, SignProtocol } from '../wrappers';
-import { NetworkProvider } from '@ton/blueprint';
+import { compile, NetworkProvider } from '@ton/blueprint';
 import { DataLocation, getRegisterHashCell, signCell } from '../utils';
 import { mnemonicToWalletKey } from 'ton-crypto';
 
@@ -18,6 +18,8 @@ export async function run(provider: NetworkProvider) {
     registrantPubKey: keyPair.publicKey,
     revocable: true,
     schemaCounterId: await signProtocol.getSchemaCounter(),
+    attestationCode: await compile('Attestation'),
+    spAddress: Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? ''),
   };
   const cellToSign = getRegisterHashCell(schema);
   const { signature } = await signCell(cellToSign, process.env.WALLET_MNEMONIC ?? '');

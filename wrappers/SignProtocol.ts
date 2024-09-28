@@ -22,8 +22,6 @@ export type SignProtocolConfig = {
   paused: boolean;
   schemaCounter: number;
   attestationCounter: number;
-  initialSchemaCounter: number;
-  initialAttestationCounter: number;
   attestationCode: Cell;
   attestationOffchainCode: Cell;
   schemaCode: Cell;
@@ -36,8 +34,6 @@ export function signProtocolConfigToCell(config: SignProtocolConfig): Cell {
     paused,
     schemaCounter,
     attestationCounter,
-    initialSchemaCounter,
-    initialAttestationCounter,
     attestationCode,
     attestationOffchainCode,
     schemaCode,
@@ -49,8 +45,6 @@ export function signProtocolConfigToCell(config: SignProtocolConfig): Cell {
     .storeUint(Number(paused), 1)
     .storeUint(schemaCounter, 64)
     .storeUint(attestationCounter, 64)
-    .storeUint(initialSchemaCounter, 64)
-    .storeUint(initialAttestationCounter, 64)
     .storeRef(attestationCode)
     .storeRef(attestationOffchainCode)
     .storeRef(schemaCode)
@@ -61,7 +55,7 @@ export class SignProtocol implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell },
-  ) {}
+  ) { }
 
   static createFromAddress(address: Address) {
     return new SignProtocol(address);
@@ -108,7 +102,7 @@ export class SignProtocol implements Contract {
       type: 'cell',
     }
     const result = await provider.get('get_attestation_id', [arg]);
-    
+
     return result.stack.readAddress();
   }
 
@@ -118,7 +112,7 @@ export class SignProtocol implements Contract {
       type: 'cell',
     }
     const result = await provider.get('get_attestation_offchain_id', [arg]);
-    
+
     return result.stack.readAddress();
   }
 
@@ -128,16 +122,14 @@ export class SignProtocol implements Contract {
       type: 'cell',
     }
     const result = await provider.get('get_schema_id', [arg]);
-    
+
     return result.stack.readAddress();
   }
 
   async sendChangeAdmin(provider: ContractProvider, via: Sender, newAdmin: Address) {
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.ChangeAdmin, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeAddress(newAdmin)
       .endCell();
     const result = await provider.internal(via, {
@@ -150,10 +142,8 @@ export class SignProtocol implements Contract {
 
   async sendChangeCode(provider: ContractProvider, via: Sender, codeType: CodeType, newCode: Cell) {
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.ChangeCode, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeUint(codeType, 32)
       .storeRef(newCode)
       .endCell();
@@ -167,10 +157,8 @@ export class SignProtocol implements Contract {
 
   async sendChangePause(provider: ContractProvider, via: Sender, paused: boolean) {
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.ChangePaused, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeUint(Number(paused), 1)
       .endCell();
     const result = await provider.internal(via, {
@@ -183,10 +171,8 @@ export class SignProtocol implements Contract {
 
   async sendChangeVersion(provider: ContractProvider, via: Sender, version: string) {
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.ChangeVersion, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeUint(stringToInt(version), 64)
       .endCell();
     const result = await provider.internal(via, {
@@ -199,10 +185,8 @@ export class SignProtocol implements Contract {
 
   async sendWithdraw(provider: ContractProvider, via: Sender, amount: string) {
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.Withdraw, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeCoins(toNano(amount))
       .endCell();
     const result = await provider.internal(via, {
@@ -213,19 +197,23 @@ export class SignProtocol implements Contract {
     return result;
   }
 
-  async sendRegisterSchema(provider: ContractProvider, via: Sender, schema: SchemaConfig, signature?: Uint8Array) {
+  async sendRegisterSchema(provider: ContractProvider, via: Sender, schema: SchemaConfig, signature?: Uint8Array, hook?: Cell) {
     const schemaCell = schemaConfigToCell(schema);
-    const messageBody = beginCell()
-      .storeUint(0, 4)
+    const messageBuilder = beginCell()
       .storeUint(OpCode.Register, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(schemaCell)
-      .endCell();
+      .storeUint(hook ? 1 : 0, 1);
+
+    if (hook) {
+      messageBuilder.storeRef(hook);
+    }
+
     const result = await provider.internal(via, {
-      value: '0.04',
-      body: messageBody,
+      value: '0.1',
+      body: messageBuilder.endCell(),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
     });
 
     return result;
@@ -242,10 +230,8 @@ export class SignProtocol implements Contract {
     const schemaCell = schemaConfigToCell(schema);
     const attestCell = attestationConfigToCell(attestation);
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.Attest, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(attestCell)
       .storeRef(schemaCell);
@@ -271,10 +257,8 @@ export class SignProtocol implements Contract {
   ) {
     const attestCell = attestationOffchainConfigToCell(attestation);
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.Attest, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(attestCell)
       .storeRef(beginCell().storeAddress(attester).endCell())
@@ -301,10 +285,8 @@ export class SignProtocol implements Contract {
     const schemaCell = schemaConfigToCell(schema);
     const attestCell = attestationConfigToCell(attestation);
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.Revoke, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(beginCell().storeAddress(attestationId).storeUint(stringToInt(reason), 256).endCell())
       .storeRef(attestCell)
@@ -332,10 +314,8 @@ export class SignProtocol implements Contract {
   ) {
     const attestCell = attestationOffchainConfigToCell(attestation);
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.Revoke, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(beginCell().storeAddress(attestationId).storeUint(stringToInt(reason), 256).endCell())
       .storeRef(attestCell)

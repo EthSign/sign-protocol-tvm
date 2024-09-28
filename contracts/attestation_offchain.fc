@@ -1,29 +1,40 @@
 #pragma version >=0.3.0;
 
+#include "../node_modules/@ston-fi/funcbox/autoload.fc";
+
 #include "imports/stdlib.fc";
 #include "imports/constants.fc";
+#include "imports/definitions_helpers.fc";
+#include "imports/utils.fc";
+
+#include "operations/helper_ops.fc";
+#include "operations/hash_ops.fc";
+#include "operations/attestation_offchain_ops.fc";
 
 ;; =============== storage =============================
 
 global slice attester;
 global int attester_pubkey;
 global int timestamp;
+global slice sp_address;
 
-;; load_data populates storage variables using stored data
+cell get_offchain_attestation_data() method_id;
+
 () load_data() impure {
   var ds = get_data().begin_parse();
 
   attester = ds~load_msg_addr();
   attester_pubkey = ds~load_uint(256);
   timestamp = ds~load_uint(32);
+  sp_address = ds~load_msg_addr();
 }
 
-;; save_data stores storage variables as a cell into persistent storage
-() save_data (slice _attester, int _attester_pubkey, int _timestamp) impure {
+() save_data (slice _attester, int _attester_pubkey, int _timestamp, slice _sp_address) impure {
   cell data = begin_cell()
     .store_slice(_attester)
     .store_uint(_attester_pubkey, 256)
     .store_uint(_timestamp, 32)
+    .store_slice(_sp_address)
     .end_cell();
     
   set_data(data);
@@ -31,31 +42,61 @@ global int timestamp;
 
 ;; =============== messages =============================
 
-;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
-() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
-  if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+() recv_internal(int balance, int msg_value, cell in_msg_full, slice in_msg) {
+  if (in_msg.slice_empty?()) { ;; ignore all empty messages
     return ();
   }
 
-  slice cs = in_msg_full.begin_parse();
-  int flags = cs~load_uint(4);
+  slice in_msg_full_slice = in_msg_full.begin_parse();
+  int flags = in_msg_full_slice~load_uint(4);
+  slice sender_address = in_msg_full_slice~load_msg_addr();
 
   if (flags & 1) {
+    in_msg~skip_bits(32);  ;;0xFFFFFFFF
+
+    int bounced_op = in_msg~load_uint(32);
+    int bounced_query_id = in_msg~load_uint(64);
+
     return ();
   }
 
-  int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
-  int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+  int op = in_msg~load_uint(32);
+  int query_id = in_msg~load_uint(64);
 
-  if (op == op::revoke_attestation) {
+  if (op == op::revoke_offchain) {
     load_data();
+    throw_unless(error::unauthorized, equal_slices(sender_address, sp_address));
 
     if (timestamp == 1) {
       throw(error::offchain_attestation_already_revoked);
     }
 
-    save_data(attester, attester_pubkey, 1);
+    var signature = in_msg~load_bits(512);
+    int reason = in_msg~load_uint(256);
+    slice attester_sender = in_msg~load_msg_addr();
+    int has_hook? = in_msg~load_uint(1);
 
+    revoke_offchain(timestamp, attester, attester_pubkey, reason, signature, attester_sender);
+
+    save_data(
+      attester,
+      attester_pubkey,
+      1,
+      sp_address
+    );
+
+    if (has_hook?) {
+      cell attestation_offchain = get_offchain_attestation_data();
+      cell body = compose_body(
+        op::call_hook_from_attestation_offchain,
+        query_id,
+        begin_cell()
+          .store_ref(attestation_offchain)
+          .store_ref(in_msg~load_ref())
+      );
+      
+      send_msg_with_body(1, sp_address, 0, body, 1);
+    }
     return ();
   }
 

@@ -6,19 +6,16 @@ const op::withdraw = "WITHDRAW"c;
 const op::register = "REGISTER"c;
 const op::register_batch = "REGISTER_BATCH"c;
 const op::attest = "ATTEST"c;
-const op::attest_with_fees = "ATTEST_WITH_FEES"c;
 const op::attest_batch = "ATTEST_BATCH"c;
-const op::attest_bacth_with_fees = "ATTEST_BATCH_WITH_FEES"c;
 const op::attest_offchain = "ATTEST_OFFCHAIN"c;
 const op::attest_offchain_batch = "ATTEST_OFFCHAIN_BATCH"c;
 const op::revoke = "REVOKE"c;
-const op::revoke_with_fees = "REVOKE_WITH_FEES"c;
 const op::revoke_batch = "REVOKE_BATCH"c;
-const op::revoke_batch_with_fees = "REVOKE_BATCH_WITH_FEES"c;
 const op::revoke_offchain = "REVOKE_OFFCHAIN"c;
 const op::revoke_offchain_batch = "REVOKE_OFFCHAIN_BATCH"c;
-
-const op::revoke_attestation = "REVOKE_ATTESTATION"c;
+const op::call_hook_from_schema = "CALL_HOOK_FROM_SCHEMA"c;
+const op::call_hook_from_attestation = "CALL_HOOK_FROM_ATTESTATION"c;
+const op::call_hook_from_attestation_offchain = "CALL_HOOK_FROM_ATTESTATION_OFFCHAIN"c;
 ;; operation codes
 
 const action::register = "REGISTER"c;

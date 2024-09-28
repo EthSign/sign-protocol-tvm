@@ -1,0 +1,80 @@
+() _attest(cell attestation, int max_valid_for, cell attestation_code, int attestation_counter, int schema_counter, int delegate_mode, slice sender_address, int resolver_fees) impure {
+  (
+    slice schema_id, 
+    slice linked_attestation_id, 
+    int attest_timestamp, 
+    int revoke_timestamp, 
+    slice attester, 
+    int attester_pubkey,
+    int valid_until, 
+    int data_location, 
+    int revoked, 
+    int recipients_len, 
+    tuple recipients, 
+    int _data,
+    int schema_counter_id, 
+    int linked_attestation_counter_id, 
+    int attestation_counter_id,
+    slice sp_address
+  ) = __get_attestation_data(attestation);
+ 
+  if (~(delegate_mode) & ~(equal_slices(attester, sender_address))) {
+    throw(error::attestation_wrong_attester);
+  }
+
+  if (linked_attestation_counter_id > 0 & ~(__attestation_exists(linked_attestation_counter_id, attestation_counter))) {
+    throw(error::attestation_nonexistent);
+  }
+
+  if (~(__schema_exists(schema_counter_id, schema_counter))) {
+    throw(error::schema_nonexistent);
+  }
+
+  if (max_valid_for > 0) {
+    int attestation_valid_for = valid_until - now();
+
+    if (max_valid_for < attestation_valid_for) {
+      throw(error::attestation_invalid_duration);
+    }
+  }
+  
+  cell init = compose_init(attestation_code, attestation);
+  slice attestation_address = calculate_address(init);
+
+  send_msg_with_body_and_init(1, attestation_address, resolver_fees, empty_cell(), init, 1);
+
+  return ();
+}
+
+;; =============== attest =============================
+
+() attest(cell attestation, int max_valid_for, cell attestation_code, int resolver_fees, int attestation_counter, int schema_counter, slice delegate_signature, slice sender_address) impure {
+  int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
+
+  (
+    slice schema_id,
+    slice linked_attestation_id,
+    int attest_timestamp,
+    int revoke_timestamp,
+    slice attester,
+    int attester_pubkey,
+    int valid_until,
+    int data_location,
+    int revoked,
+    int recipients_len,
+    tuple recipients,
+    int data,
+    int schema_counter_id,
+    int linked_attestation_counter_id,
+    int attestation_counter_id,
+    slice sp_address
+  ) = __get_attestation_data(attestation);
+
+  if (delegate_mode) {
+    __check_delegation_signature(attester_pubkey, get_delegated_attest_hash(attestation), delegate_signature);
+  }
+
+  _attest(attestation, max_valid_for, attestation_code, attestation_counter, schema_counter, delegate_mode, sender_address, resolver_fees);
+
+  return ();
+}

@@ -1,0 +1,72 @@
+() _register(cell schema) impure {
+  load_data();
+
+  cell init = compose_init(schema_code, schema);
+  slice schema_address = calculate_address(init);
+
+  send_msg_with_body_and_init(1, schema_address, 0, empty_cell(), init, 1);
+
+  return ();
+}
+
+() _attest_offchain(cell offchain_attestation, slice attester) impure {
+  (slice attester, int attester_pubkey, int attest_timestamp) = __get_offchain_attestation_data(offchain_attestation);
+
+  if (__offchain_attestation_exists(attest_timestamp)) {
+    throw(error::offchain_attestation_exists);
+  }
+
+  cell init = compose_init(attestation_offchain_code, offchain_attestation);
+  slice attestation_address = calculate_address(init);
+
+  send_msg_with_body_and_init(1, attestation_address, 0, empty_cell(), init, 1);
+
+  return ();
+}
+
+;; =============== register =============================
+
+() register(cell schema, slice delegate_signature) impure {
+  int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
+  (
+    slice registrant,
+    int registrant_pubkey,
+    int revocable,
+    int data_location,
+    int max_valid_for,
+    int timestamp,
+    int data,
+    int schema_counter_id,
+    slice sp_address,
+    cell attestation_code
+  ) = __get_schema_data(schema);
+
+  if (delegate_mode) {
+    __check_delegation_signature(registrant_pubkey, get_delegated_register_hash(schema), delegate_signature);
+  } else {
+    if (~(equal_slices(registrant, my_address()))) {
+      throw(error::schema_wrong_registrant);
+    }
+  }
+  
+  _register(schema);
+
+  return ();
+}
+
+;; =============== attest =============================
+
+() attest_offchain(cell offchain_attestation, slice delegate_attester, slice delegate_signature, slice sender_address) impure {
+  slice attester = sender_address;
+
+  if (~(delegate_signature.slice_empty?())) {
+    (slice attester, int attester_pubkey, int attest_timestamp) = __get_offchain_attestation_data(offchain_attestation);
+    __check_delegation_signature(attester_pubkey, get_delegated_offchain_attest_hash(offchain_attestation), delegate_signature);
+
+    attester = delegate_attester;
+  }
+
+  _attest_offchain(offchain_attestation, attester);
+
+  return ();
+}

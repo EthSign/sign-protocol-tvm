@@ -1,7 +1,5 @@
 ;; =============== functions =============================
 
-(slice, int, int, int, int, int, int, int) __get_schema_data(cell _schema) impure inline;
-slice __deploy_contract (cell code, cell data, cell master_msg, int coins) impure inline;
 cell __tuple_to_cell(tuple t) impure inline;
 () __check_delegation_signature(int delegate_attester_pubkey, int hash, slice delegate_signature) impure inline;
 
@@ -15,3 +13,12 @@ int get_delegated_revoke_hash(slice attestation_id, int reason) inline_ref;
 int get_delegated_revoke_batch_hash(tuple attestation_ids, tuple reasons) inline_ref;
 int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, int reason) inline_ref;
 int get_delegated_offchain_revoke_batch_hash(tuple offchain_attestation_ids, tuple reasons) inline_ref;
+
+(slice, int, int, int, int, int, int, int, slice, cell) __get_schema_data(cell _schema) impure inline;
+(slice, slice, int, int, slice, int, int, int, int, int, tuple, int, int, int, int, slice) __get_attestation_data(cell _attestation) impure inline;
+(slice, int, int) __get_offchain_attestation_data(cell _offchain_attestation) impure inline;
+int __schema_exists(int schema_counter_id, int schema_timestamp) impure inline;
+int __attestation_exists(int attestation_counter_id, int attestation_counter) impure inline ;
+int __offchain_attestation_exists(int attestation_timestamp) impure inline;
+
+(cell) compose_init(cell code, cell data) inline;

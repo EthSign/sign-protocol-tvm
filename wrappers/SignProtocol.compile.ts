@@ -11,9 +11,7 @@ export const compile: CompilerConfig = {
     'contracts/imports/utils.fc',
     'contracts/operations/hash_ops.fc',
     'contracts/operations/helper_ops.fc',
-    'contracts/operations/register_ops.fc',
-    'contracts/operations/attest_ops.fc',
-    'contracts/operations/revoke_ops.fc',
+    'contracts/operations/sp_ops.fc',
     'contracts/sign_protocol.fc',
   ],
 };

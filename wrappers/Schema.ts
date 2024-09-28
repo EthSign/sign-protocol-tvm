@@ -18,12 +18,19 @@ export type SchemaConfig = {
   timestamp: Date;
   data: string;
   schemaCounterId: number;
+  spAddress: Address;
+  attestationCode: Cell;
 };
 
 export function schemaConfigToCell(config: SchemaConfig): Cell {
-  const { registrant, registrantPubKey, revocable, dataLocation, maxValidFor, timestamp, data, schemaCounterId } =
+  const { registrant, registrantPubKey, revocable, dataLocation, maxValidFor, timestamp, data, schemaCounterId, attestationCode, spAddress } =
     config;
-  const c1 = beginCell().storeUint(stringToInt(data), 256).endCell();
+  const c1 = beginCell()
+    .storeUint(stringToInt(data), 256)
+    .storeAddress(spAddress)
+    .storeRef(attestationCode)
+    .endCell();
+
   return beginCell()
     .storeAddress(registrant)
     .storeUint(bufferToInt(registrantPubKey), 256)
@@ -40,7 +47,7 @@ export class Schema implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell },
-  ) {}
+  ) { }
 
   static createFromAddress(address: Address) {
     return new Schema(address);
@@ -74,8 +81,12 @@ export class Schema implements Contract {
 
     const s1 = cellHash.loadRef().beginParse();
     const data = intToString(s1.loadUint(256));
+    const spAddress = s1.loadAddress();
+    const attestationCode = s1.loadRef();
 
     return {
+      spAddress,
+      attestationCode,
       registrant,
       registrantPubKey,
       revocable,

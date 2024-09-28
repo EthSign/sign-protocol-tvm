@@ -1,0 +1,19 @@
+#include "imports/stdlib.fc";
+
+(cell) compose_hook(slice recipient, int op, int query_id, cell body) {
+  return begin_cell()
+    .store_slice(recipient)
+    .store_uint(op, 32)
+    .store_uint(query_id, 64)
+    .store_ref(body)
+  .end_cell();
+}
+
+(slice, int, int, cell) get_hook_data(cell hook) {
+  slice recipient = hook~load_msg_addr();
+  int op = hook~load_uint(32);
+  int query_id = hook~load_uint(64);
+  cell body = hook~load_ref();
+
+  return (recipient, op, query_id, body);
+}

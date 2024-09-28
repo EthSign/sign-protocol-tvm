@@ -79,7 +79,7 @@ export class Attestation implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell },
-  ) {}
+  ) { }
 
   static createFromAddress(address: Address) {
     return new Attestation(address);
@@ -148,10 +148,8 @@ export class Attestation implements Contract {
   async sendRevokeAttestation(provider: ContractProvider, via: Sender, schema: SchemaConfig) {
     const schemaCell = schemaConfigToCell(schema);
     const messageBody = beginCell()
-      .storeUint(0, 4)
       .storeUint(OpCode.RevokeAttestation, 32)
       .storeUint(0, 64)
-      .storeAddress(via.address)
       .storeRef(schemaCell)
       .endCell();
     const result = await provider.internal(via, {

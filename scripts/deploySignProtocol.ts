@@ -15,8 +15,6 @@ export async function run(provider: NetworkProvider) {
         paused: false,
         schemaCounter: 0,
         attestationCounter: 0,
-        initialSchemaCounter: 0,
-        initialAttestationCounter: 0,
         attestationCode,
         attestationOffchainCode,
         schemaCode,
