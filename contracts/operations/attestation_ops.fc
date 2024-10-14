@@ -1,4 +1,4 @@
-() _revoke(slice attester, int reason, int delegate_mode, slice sender_address, int query_id, int resolver_fees) impure {
+() _revoke(slice attester, slice reason, int delegate_mode, slice sender_address, int resolver_fees) impure {
   if (attester.slice_empty?()) {
     throw(error::attestation_nonexistent);
   }
@@ -12,12 +12,12 @@
 
 ;; =============== revoke =============================
 
-() revoke(slice attester, int attester_pubkey, int reason, int resolver_fees, slice delegate_signature, slice sender_address) impure {
+() revoke(slice attester, int attester_pubkey, slice reason, int resolver_fees, slice delegate_signature, slice sender_address) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
 
   if (delegate_mode) {
     __check_delegation_signature(attester_pubkey, get_delegated_revoke_hash(my_address(), reason), delegate_signature);
   }
 
-  _revoke(attester, reason, delegate_mode, sender_address, 0, resolver_fees);
+  _revoke(attester, reason, delegate_mode, sender_address, resolver_fees);
 }

@@ -12,8 +12,8 @@
 #include "operations/attestation_ops.fc";
 ;; =============== storage =============================
 
-global slice schema_id;
-global slice linked_attestation_id;
+global slice schema_address;
+global slice linked_attestation_address;
 global int attest_timestamp;
 global int revoke_timestamp;
 global slice attester;
@@ -23,10 +23,14 @@ global int data_location;
 global int revoked;
 global int recipients_len;
 global tuple recipients;
-global int data;
-global int schema_counter_id;
-global int linked_attestation_counter_id;
-global int attestation_counter_id;
+global int data_len;
+global slice data;
+global int reason_len;
+global slice reason;
+global int schema_id;
+global int linked_attestation_id;
+global int attestation_id;
+global int revocable;
 global slice sp_address;
 
 (cell) get_attestation_data() method_id;
@@ -34,8 +38,8 @@ global slice sp_address;
 () load_data() impure {
   var ds = get_data().begin_parse();
 
-  schema_id = ds~load_msg_addr();
-  linked_attestation_id = ds~load_msg_addr();
+  schema_address = ds~load_msg_addr();
+  linked_attestation_address = ds~load_msg_addr();
   attester = ds~load_msg_addr();
   attest_timestamp = ds~load_uint(32);
   revoke_timestamp = ds~load_uint(32);
@@ -45,54 +49,53 @@ global slice sp_address;
   revoked = ds~load_uint(1);
 
   slice s2 = ds~load_ref().begin_parse();
-  data = s2~load_uint(256);
-  schema_counter_id = s2~load_uint(64);
-  linked_attestation_counter_id = s2~load_uint(64);
-  attestation_counter_id = s2~load_uint(64);
+  data_len = s2~load_uint(8);
+  data = s2~load_bits(data_len);
+  schema_id = s2~load_uint(64);
+  linked_attestation_id = s2~load_uint(64);
+  attestation_id = s2~load_uint(64);
   sp_address = s2~load_msg_addr();
+  revocable = s2~load_uint(1);
+  reason_len = s2~load_uint(8);
+  reason = s2~load_bits(reason_len);
 
   slice s3 = ds~load_ref().begin_parse();
   recipients_len = s3~load_uint(64);
-  recipients = empty_tuple();
-
-  int i = recipients_len;
-  slice recipient = null();
-
-  while (i > 0) {
-    recipient =  s3~load_msg_addr();
-    
-    recipients~tpush(recipient);
-
-    i = i - 1;
-  }
+  recipients = cast_to_tuple(s3~load_uint(1023));
 }
 
 ;; =============== utils =============================
 
-(cell) compose_attestation (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, tuple _recipients, int _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id, slice _sp_address) impure {
-  int r_len = _recipients.tlen();
-  builder c3 = begin_cell()
-    .store_uint(r_len, 64);
+(cell) compose_attestation(slice _schema_address, slice _linked_attestation_address, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, tuple _recipients, int data_len, slice _data, int _schema_id, int _linked_attestation_id, int _attestation_id, slice _sp_address, int _revocable, int _reason_len, slice _reason) impure {
+  int r_len = 0;
+  tuple final_recipients = null();
 
-  int i = r_len;
+  while (~ _recipients.is_null()) {
+    var recipient = _recipients~pop_back();
 
-  while (i > 0) {
-    slice recipient = _recipients~tpop();
-
-    c3 = c3.store_slice(recipient);
-    i = i - 1;
+    final_recipients~push_back(recipient);
+    r_len = r_len + 1;
   }
 
-  var c2 = begin_cell()
-    .store_uint(_data, 256)
-    .store_uint(_schema_counter_id, 64)
-    .store_uint(_linked_attestation_counter_id, 64)
-    .store_uint(_attestation_counter_id, 64)
-    .store_slice(_sp_address)
+  cell c3 = begin_cell()
+    .store_uint(r_len, 64)
+    .store_uint(cast_to_int(final_recipients), 1023)
     .end_cell();
-  var attestation_data = begin_cell()
-    .store_slice(_schema_id)
-    .store_slice(_linked_attestation_id)
+
+  cell c2 = begin_cell()
+    .store_uint(data_len, 8)
+    .store_slice(_data)
+    .store_uint(_schema_id, 64)
+    .store_uint(_linked_attestation_id, 64)
+    .store_uint(_attestation_id, 64)
+    .store_slice(_sp_address)
+    .store_uint(_revocable, 1)
+    .store_uint(_reason_len, 8)
+    .store_slice(_reason)
+    .end_cell();
+  cell attestation_data = begin_cell()
+    .store_slice(_schema_address)
+    .store_slice(_linked_attestation_address)
     .store_slice(_attester)
     .store_uint(_attest_timestamp, 32)
     .store_uint(_revoke_timestamp, 32)
@@ -101,7 +104,7 @@ global slice sp_address;
     .store_uint(_data_location, 2)
     .store_uint(_revoked, 1)
     .store_ref(c2)
-    .store_ref(c3.end_cell())
+    .store_ref(c3)
     .end_cell();
 
   return attestation_data;
@@ -109,10 +112,10 @@ global slice sp_address;
 
 ;; ===================================================
 
-() save_data (slice _schema_id, slice _linked_attestation_id, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, tuple _recipients, int _data, int _schema_counter_id, int _linked_attestation_counter_id, int _attestation_counter_id, slice _sp_address) impure {
+() save_data (slice _schema_address, slice _linked_attestation_address, int _attest_timestamp, int _revoke_timestamp, slice _attester, int _attester_pubkey, int _valid_until, int _data_location, int _revoked, tuple _recipients, int _data_len, slice _data, int _schema_id, int _linked_attestation_id, int _attestation_id, slice _sp_address, int _revocable, int _reason_len, slice _reason) impure {
   cell attestation = compose_attestation(
-    _schema_id,
-    _linked_attestation_id,
+    _schema_address,
+    _linked_attestation_address,
     _attest_timestamp,
     _revoke_timestamp,
     _attester,
@@ -121,11 +124,15 @@ global slice sp_address;
     _data_location,
     _revoked,
     _recipients,
+    _data_len,
     _data,
-    _schema_counter_id,
-    _linked_attestation_counter_id,
-    _attestation_counter_id,
-    _sp_address
+    _schema_id,
+    _linked_attestation_id,
+    _attestation_id,
+    _sp_address,
+    _revocable,
+    _reason_len,
+    _reason
   );
 
   set_data(attestation);
@@ -156,14 +163,19 @@ global slice sp_address;
 
   if (op == op::revoke) {
     load_data();
-    throw_unless(error::unauthorized, equal_slices(sender_address, schema_id));
+    throw_unless(error::unauthorized, equal_slices(sender_address, sp_address));
 
     if (revoked) {
       throw(error::attestation_already_revoked);
     }
 
+    if (revocable != 1) {
+      throw(error::attestation_irrevocable);
+    }
+
     var signature = in_msg~load_bits(512);
-    int reason = in_msg~load_uint(256);
+    int reason_len = in_msg~load_uint(8);
+    slice reason = in_msg~load_bits(reason_len);
     slice attester_sender = in_msg~load_msg_addr();
     int fees = in_msg~load_coins();
     int has_hook? = in_msg~load_uint(1);
@@ -171,8 +183,8 @@ global slice sp_address;
     revoke(attester, attester_pubkey, reason, fees, signature, attester_sender);
 
     save_data(
-      schema_id,
-      linked_attestation_id,
+      schema_address,
+      linked_attestation_address,
       attest_timestamp,
       now(),
       attester,
@@ -181,11 +193,15 @@ global slice sp_address;
       data_location,
       1,
       recipients,
+      data_len,
       data,
-      schema_counter_id,
-      linked_attestation_counter_id,
-      attestation_counter_id,
-      sp_address
+      schema_id,
+      linked_attestation_id,
+      attestation_id,
+      sp_address,
+      revocable,
+      reason_len,
+      reason
     );
 
     if (has_hook?) {
@@ -212,8 +228,8 @@ global slice sp_address;
 cell get_attestation_data() method_id {
   load_data();
   cell attestation = compose_attestation(
-    schema_id,
-    linked_attestation_id,
+    schema_address,
+    linked_attestation_address,
     attest_timestamp,
     revoke_timestamp,
     attester,
@@ -222,11 +238,15 @@ cell get_attestation_data() method_id {
     data_location,
     revoked,
     recipients,
+    data_len,
     data,
-    schema_counter_id,
-    linked_attestation_counter_id,
-    attestation_counter_id,
-    sp_address
+    schema_id,
+    linked_attestation_id,
+    attestation_id,
+    sp_address,
+    revocable,
+    reason_len,
+    reason
   );
     
   return attestation;

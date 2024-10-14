@@ -17,7 +17,7 @@ export async function run(provider: NetworkProvider) {
     registrant: Address.parse(process.env.ADMIN_ADDRESS ?? ''),
     registrantPubKey: keyPair.publicKey,
     revocable: true,
-    schemaCounterId: 17,
+    schemaId: 17,
   };
   // const cellToSign = getRegisterHashCell(schema);
   // const { signature } = await signCell(cellToSign, process.env.WALLET_MNEMONIC ?? '');

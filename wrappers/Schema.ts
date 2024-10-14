@@ -4,8 +4,6 @@ import {
   DataLocation,
   dateToUnixTimestamp,
   intToBuffer,
-  intToString,
-  stringToInt,
   unixTimestampToDate,
 } from '../utils';
 
@@ -16,17 +14,21 @@ export type SchemaConfig = {
   dataLocation: DataLocation;
   maxValidFor: Date;
   timestamp: Date;
+  dataLen: number;
   data: string;
-  schemaCounterId: number;
+  schemaId: number;
   spAddress: Address;
   attestationCode: Cell;
 };
 
 export function schemaConfigToCell(config: SchemaConfig): Cell {
-  const { registrant, registrantPubKey, revocable, dataLocation, maxValidFor, timestamp, data, schemaCounterId, attestationCode, spAddress } =
+  const { registrant, registrantPubKey, revocable, dataLocation, maxValidFor, timestamp, dataLen, data, schemaId, attestationCode, spAddress } =
     config;
   const c1 = beginCell()
-    .storeUint(stringToInt(data), 256)
+    .storeUint(dataLen, 8)
+    .storeStringTail(data)
+    .endCell();
+  const c2 = beginCell()
     .storeAddress(spAddress)
     .storeRef(attestationCode)
     .endCell();
@@ -38,8 +40,9 @@ export function schemaConfigToCell(config: SchemaConfig): Cell {
     .storeUint(dataLocation, 2)
     .storeUint(dateToUnixTimestamp(maxValidFor), 32)
     .storeUint(dateToUnixTimestamp(timestamp), 32)
-    .storeUint(schemaCounterId, 64)
+    .storeUint(schemaId, 64)
     .storeRef(c1)
+    .storeRef(c2)
     .endCell();
 }
 
@@ -77,12 +80,15 @@ export class Schema implements Contract {
     const dataLocation = cellHash.loadUint(2) as DataLocation;
     const maxValidFor = unixTimestampToDate(cellHash.loadUint(32));
     const timestamp = unixTimestampToDate(cellHash.loadUint(32));
-    const schemaCounterId = cellHash.loadUint(64);
+    const schemaId = cellHash.loadUint(64);
 
     const s1 = cellHash.loadRef().beginParse();
-    const data = intToString(s1.loadUint(256));
-    const spAddress = s1.loadAddress();
-    const attestationCode = s1.loadRef();
+    const dataLen = s1.loadUint(8);
+    const data = s1.loadStringTail();
+
+    const s2 = cellHash.loadRef().beginParse();
+    const spAddress = s2.loadAddress();
+    const attestationCode = s2.loadRef();
 
     return {
       spAddress,
@@ -93,8 +99,9 @@ export class Schema implements Contract {
       dataLocation,
       maxValidFor,
       timestamp,
+      dataLen,
       data,
-      schemaCounterId,
+      schemaId,
     };
   }
 }

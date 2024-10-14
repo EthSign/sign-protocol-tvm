@@ -47,7 +47,7 @@ export async function run(provider: NetworkProvider) {
     attestationAddress,
     attestationData,
     schemaData,
-    signature,
+    signature ?,
     reason,
   );
 

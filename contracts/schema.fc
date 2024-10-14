@@ -18,8 +18,9 @@ global int revocable;
 global int data_location;
 global int max_valid_for;
 global int timestamp;
-global int data;
-global int schema_counter_id;
+global int data_len;
+global slice data;
+global int schema_id;
 global slice sp_address;
 global cell attestation_code;
 
@@ -34,17 +35,20 @@ cell get_schema_data() method_id;
   data_location = ds~load_uint(2);
   max_valid_for = ds~load_uint(32);
   timestamp = ds~load_uint(32);
-  schema_counter_id = ds~load_uint(64);
+  schema_id = ds~load_uint(64);
   
-  var s1 = ds~load_ref().begin_parse();
-  data = s1~load_uint(256);
-  sp_address = s1~load_msg_addr();
-  attestation_code = s1~load_ref();
+  slice s1 = ds~load_ref().begin_parse();
+  data_len = s1~load_uint(8);
+  data = s1~load_bits(data_len);
+
+  slice s2 = ds~load_ref().begin_parse();
+  sp_address = s2~load_msg_addr();
+  attestation_code = s2~load_ref();
 }
 
 ;; =============== utils =============================
 
-(cell) compose_schema (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data, int _schema_counter_id, slice _sp_address, cell _attestation_code) {
+(cell) compose_schema (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data_len, slice _data, int _schema_id, slice _sp_address, cell _attestation_code) {
   cell schema = begin_cell()
     .store_slice(_registrant)
     .store_uint(_registrant_pubkey, 256)
@@ -52,10 +56,15 @@ cell get_schema_data() method_id;
     .store_uint(_data_location, 2)
     .store_uint(_max_valid_for, 32)
     .store_uint(_timestamp, 32)
-    .store_uint(_schema_counter_id, 64)
+    .store_uint(_schema_id, 64)
     .store_ref(
       begin_cell()
-        .store_uint(_data, 256)
+        .store_uint(_data_len, 8)
+        .store_slice(_data)
+        .end_cell()
+    )
+    .store_ref(
+      begin_cell()
         .store_slice(_sp_address)
         .store_ref(_attestation_code)
         .end_cell()
@@ -67,7 +76,7 @@ cell get_schema_data() method_id;
 
 ;; ================================================
 
-() save_data (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data, int _schema_counter_id, slice _sp_address, cell _attestation_code) impure {
+() save_data (slice _registrant, int _registrant_pubkey, int _revocable, int _data_location, int _max_valid_for, int _timestamp, int _data_len, slice _data, int _schema_id, slice _sp_address, cell _attestation_code) impure {
   cell schema = compose_schema(
     _registrant,
     _registrant_pubkey,
@@ -75,8 +84,9 @@ cell get_schema_data() method_id;
     _data_location,
     _max_valid_for,
     _timestamp,
+    _data_len,
     _data,
-    _schema_counter_id,
+    _schema_id,
     _sp_address,
     _attestation_code
   );
@@ -111,17 +121,17 @@ cell get_schema_data() method_id;
     load_data();
     throw_unless(error::unauthorized, equal_slices(sender_address, sp_address));
 
-    var signature = in_msg~load_bits(512);
     cell attestation = in_msg~load_ref();
+    var signature = in_msg~load_bits(512);
     slice attester = in_msg~load_msg_addr();
     int fees = in_msg~load_coins();
     int attestation_counter = in_msg~load_uint(64);
     int schema_counter = in_msg~load_uint(64);
-    int has_hook? = in_msg~load_uint(1);
+    int has_hook = in_msg~load_uint(1);
 
     attest(attestation, max_valid_for, attestation_code, fees, attestation_counter, schema_counter, signature, attester);
 
-    if (has_hook?) {
+    if (has_hook) {
       cell schema = get_schema_data();
       cell body = compose_body(
         op::call_hook_from_schema,
@@ -135,42 +145,6 @@ cell get_schema_data() method_id;
     }
 
     return ();
-  }
-
-  if (op == op::revoke) {
-    load_data();
-    throw_unless(error::unauthorized, equal_slices(sender_address, sp_address));
-
-    if (revocable != 1) {
-      throw(error::attestation_irrevocable);
-    }
-
-    var signature = in_msg~load_bits(512);
-    int reason = in_msg~load_uint(256);
-    slice attestation_address = in_msg~load_msg_addr();
-    slice attester = in_msg~load_msg_addr();
-    int fees = in_msg~load_coins();
-    int has_hook? = in_msg~load_uint(1);
-
-    builder hook_body = begin_cell()
-      .store_slice(signature)
-      .store_int(reason, 256)
-      .store_slice(attester)
-      .store_coins(fees)
-      .store_int(has_hook?, 1);
-
-    if (has_hook?) {
-      hook_body.store_ref(in_msg~load_ref());
-    }
-
-    cell body = compose_body(
-      op::revoke,
-      query_id,
-      hook_body
-    );
-
-    send_msg_with_body(1, attestation_address, 0, body, 1);
-
   }
 
   throw(error::unknown_op); ;; if the message contains an op that is not known to this contract, we throw
@@ -187,8 +161,9 @@ cell get_schema_data() method_id {
     data_location,
     max_valid_for,
     timestamp,
+    data_len,
     data,
-    schema_counter_id,
+    schema_id,
     sp_address,
     attestation_code
   );

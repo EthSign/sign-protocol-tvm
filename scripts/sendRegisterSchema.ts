@@ -1,8 +1,10 @@
-import { Address } from '@ton/core';
-import { SchemaConfig, SignProtocol } from '../wrappers';
+import { Address, beginCell, Cell } from '@ton/core';
+import { SchemaConfig, schemaConfigToCell, SignProtocol } from '../wrappers';
 import { compile, NetworkProvider } from '@ton/blueprint';
-import { DataLocation, getRegisterHashCell, signCell } from '../utils';
+import { DataLocation, getRegisterHashCell, OpCode, signCell } from '../utils';
 import { mnemonicToWalletKey } from 'ton-crypto';
+import { TonClient } from '@ton/ton';
+import { internal, SmartContract } from 'ton-contract-executor';
 
 export async function run(provider: NetworkProvider) {
   const signProtocol = provider.open(
@@ -10,6 +12,7 @@ export async function run(provider: NetworkProvider) {
   );
   const keyPair = await mnemonicToWalletKey((process.env.ADMIN_ADDRESS ?? '').split(' '));
   const schema: SchemaConfig = {
+    dataLen: 4,
     data: 'Test',
     dataLocation: DataLocation.ONCHAIN,
     maxValidFor: new Date('2025-01-01'),
@@ -17,7 +20,7 @@ export async function run(provider: NetworkProvider) {
     registrant: Address.parse(process.env.ADMIN_ADDRESS ?? ''),
     registrantPubKey: keyPair.publicKey,
     revocable: true,
-    schemaCounterId: await signProtocol.getSchemaCounter(),
+    schemaId: await signProtocol.getSchemaCounter(),
     attestationCode: await compile('Attestation'),
     spAddress: Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? ''),
   };
@@ -26,36 +29,38 @@ export async function run(provider: NetworkProvider) {
 
   console.log('Schema', schema);
 
-  await signProtocol.sendRegisterSchema(provider.sender(), schema, signature);
+  // await signProtocol.sendRegisterSchema(provider.sender(), schema, signature);
 
   // debug
-  // const contractAddress = Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '');
-  // let client = new TonClient({
-  //   endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',
-  // });
-  // let state = await client.getContractState(contractAddress);
-  // let code = Cell.fromBoc(state.code!)[0];
-  // let data = Cell.fromBoc(state.data!)[0];
-  // const signProtocolLog = await SmartContract.fromCell(code, data, {
-  //   debug: true,
-  // });
+  const contractAddress = Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '');
+  let client = new TonClient({
+    endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC',
+  });
+  let state = await client.getContractState(contractAddress);
+  let code = Cell.fromBoc(state.code!)[0];
+  let data = Cell.fromBoc(state.data!)[0];
+  const signProtocolLog = await SmartContract.fromCell(code, data, {
+    debug: true,
+  });
 
-  // const messageBody = beginCell()
-  //   .storeUint(0, 4)
-  //   .storeUint(OpCode.Register, 32)
-  //   .storeUint(0, 64)
-  //   .storeAddress(provider.sender().address)
-  //   .storeBuffer(Buffer.from(signature))
-  //   .storeRef(schemaCell)
-  //   .endCell();
-  // const result = await signProtocolLog.sendInternalMessage(
-  //   internal({
-  //     dest: schemaId,
-  //     value: 1n,
-  //     bounce: true,
-  //     body: messageBody,
-  //   }),
-  // );
+  const schemaCell = schemaConfigToCell(schema);
+  const messageBody = beginCell()
+    .storeUint(OpCode.Register, 32)
+    .storeUint(0, 64)
+    .storeRef(schemaCell)
+    .storeUint(1, 1)
+    .storeBuffer(Buffer.from(signature))
+    .storeUint(0, 1)
+    .endCell();
 
-  // console.log('Result', result.logs, result.type);
+  const result = await signProtocolLog.sendInternalMessage(
+    internal({
+      dest: contractAddress,
+      value: 1n,
+      bounce: true,
+      body: messageBody,
+    }),
+  );
+
+  console.log('Result', result.logs, result.type);
 }

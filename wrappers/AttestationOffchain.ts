@@ -5,15 +5,21 @@ export type AttestationOffchainConfig = {
   attester: Address;
   attesterPubKey: Buffer;
   timestamp?: Date;
+  reasonLen?: number;
+  reason?: string;
+  spAddress: Address;
 };
 
 export function attestationOffchainConfigToCell(config: AttestationOffchainConfig): Cell {
-  const { attester, attesterPubKey, timestamp } = config;
+  const { attester, attesterPubKey, timestamp, spAddress, reasonLen = 0, reason = '' } = config;
 
   return beginCell()
     .storeAddress(attester)
     .storeUint(bufferToInt(attesterPubKey), 256)
     .storeUint(timestamp ? dateToUnixTimestamp(timestamp) : 0, 32)
+    .storeUint(reasonLen, 8)
+    .storeStringTail(reason)
+    .storeAddress(spAddress)
     .endCell();
 }
 
@@ -21,7 +27,7 @@ export class AttestationOffchain implements Contract {
   constructor(
     readonly address: Address,
     readonly init?: { code: Cell; data: Cell },
-  ) {}
+  ) { }
 
   static createFromAddress(address: Address) {
     return new AttestationOffchain(address);
@@ -49,6 +55,9 @@ export class AttestationOffchain implements Contract {
       attester: cellHash.loadAddress(),
       attesterPubKey: intToBuffer(cellHash.loadUint(256)),
       timestamp: unixTimestampToDate(cellHash.loadUint(32)),
+      reasonLen: cellHash.loadUint(8),
+      reason: cellHash.loadStringTail(),
+      spAddress: cellHash.loadAddress(),
     };
   }
 }

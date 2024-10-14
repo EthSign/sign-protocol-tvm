@@ -1,12 +1,11 @@
-() _register(cell schema) impure {
-  load_data();
+#include "../sp_utils.fc";
 
+() _register(cell schema_code, cell schema, int schema_id) impure {
   cell init = compose_init(schema_code, schema);
-  slice schema_address = calculate_address(init);
+  cell schema_init = compose_schema_init(my_address(), schema_id);
+  slice schema_address = calculate_address(schema_init);
 
-  send_msg_with_body_and_init(1, schema_address, 0, empty_cell(), init, 1);
-
-  return ();
+  send_msg_with_body_and_init(0, schema_address, 0, empty_cell(), init, 64);
 }
 
 () _attest_offchain(cell offchain_attestation, slice attester) impure {
@@ -19,14 +18,12 @@
   cell init = compose_init(attestation_offchain_code, offchain_attestation);
   slice attestation_address = calculate_address(init);
 
-  send_msg_with_body_and_init(1, attestation_address, 0, empty_cell(), init, 1);
-
-  return ();
+  send_msg_with_body_and_init(0, attestation_address, 0, empty_cell(), init, 1);
 }
 
 ;; =============== register =============================
 
-() register(cell schema, slice delegate_signature) impure {
+() register(cell schema_code, cell schema, slice delegate_signature) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
   (
     slice registrant,
@@ -35,8 +32,9 @@
     int data_location,
     int max_valid_for,
     int timestamp,
-    int data,
-    int schema_counter_id,
+    int data_len,
+    slice data,
+    int schema_id,
     slice sp_address,
     cell attestation_code
   ) = __get_schema_data(schema);
@@ -49,9 +47,7 @@
     }
   }
   
-  _register(schema);
-
-  return ();
+  _register(schema_code, schema, schema_id);
 }
 
 ;; =============== attest =============================

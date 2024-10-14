@@ -16,6 +16,8 @@
 global slice attester;
 global int attester_pubkey;
 global int timestamp;
+global int reason_len;
+global slice reason;
 global slice sp_address;
 
 cell get_offchain_attestation_data() method_id;
@@ -26,14 +28,18 @@ cell get_offchain_attestation_data() method_id;
   attester = ds~load_msg_addr();
   attester_pubkey = ds~load_uint(256);
   timestamp = ds~load_uint(32);
+  reason_len = ds~load_uint(8);
+  reason = ds~load_bits(reason_len);
   sp_address = ds~load_msg_addr();
 }
 
-() save_data (slice _attester, int _attester_pubkey, int _timestamp, slice _sp_address) impure {
+() save_data (slice _attester, int _attester_pubkey, int _timestamp, int _reason_len, slice _reason, slice _sp_address) impure {
   cell data = begin_cell()
     .store_slice(_attester)
     .store_uint(_attester_pubkey, 256)
     .store_uint(_timestamp, 32)
+    .store_uint(_reason_len, 8)
+    .store_slice(_reason)
     .store_slice(_sp_address)
     .end_cell();
     
@@ -72,7 +78,8 @@ cell get_offchain_attestation_data() method_id;
     }
 
     var signature = in_msg~load_bits(512);
-    int reason = in_msg~load_uint(256);
+    int reason_len = in_msg~load_uint(8);
+    slice reason = in_msg~load_bits(reason_len);
     slice attester_sender = in_msg~load_msg_addr();
     int has_hook? = in_msg~load_uint(1);
 
@@ -82,6 +89,8 @@ cell get_offchain_attestation_data() method_id;
       attester,
       attester_pubkey,
       1,
+      reason_len,
+      reason,
       sp_address
     );
 
@@ -112,6 +121,9 @@ cell get_offchain_attestation_data() method_id {
     .store_slice(attester)
     .store_uint(attester_pubkey, 256)
     .store_uint(timestamp, 32)
+    .store_uint(reason_len, 8)
+    .store_slice(reason)
+    .store_slice(sp_address)
     .end_cell();
 
   return attestation_data;

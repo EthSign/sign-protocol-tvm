@@ -42,7 +42,7 @@ export async function run(provider: NetworkProvider) {
     provider.sender(),
     attestationAddress,
     attestationData,
-    signature,
+    signature ?,
     reason,
   );
 

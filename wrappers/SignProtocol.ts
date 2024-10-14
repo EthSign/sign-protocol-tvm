@@ -96,32 +96,35 @@ export class SignProtocol implements Contract {
     return Number(result.stack.readBigNumber());
   }
 
-  async getAttestationId(provider: ContractProvider, attestation: AttestationConfig): Promise<Address> {
-    const arg: TupleItem = {
-      cell: attestationConfigToCell(attestation),
-      type: 'cell',
-    }
-    const result = await provider.get('get_attestation_id', [arg]);
+  async getAttestationAddress(provider: ContractProvider, attestationId: number, schemaId: number): Promise<Address> {
+    const args: TupleItem[] = [{
+      value: BigInt(attestationId),
+      type: 'int',
+    }, {
+      value: BigInt(schemaId),
+      type: 'int',
+    }]
+    const result = await provider.get('get_attestation_address', args);
 
     return result.stack.readAddress();
   }
 
-  async getAttestationOffchainId(provider: ContractProvider, attestationOffchain: AttestationOffchainConfig): Promise<Address> {
+  async getAttestationOffchainAddress(provider: ContractProvider, attestationOffchain: AttestationOffchainConfig): Promise<Address> {
     const arg: TupleItem = {
       cell: attestationOffchainConfigToCell(attestationOffchain),
       type: 'cell',
     }
-    const result = await provider.get('get_attestation_offchain_id', [arg]);
+    const result = await provider.get('get_attestation_offchain_address', [arg]);
 
     return result.stack.readAddress();
   }
 
-  async getSchemaId(provider: ContractProvider, schema: SchemaConfig): Promise<Address> {
+  async getSchemaAddress(provider: ContractProvider, schemaId: number): Promise<Address> {
     const arg: TupleItem = {
-      cell: schemaConfigToCell(schema),
-      type: 'cell',
+      value: BigInt(schemaId),
+      type: 'int',
     }
-    const result = await provider.get('get_schema_id', [arg]);
+    const result = await provider.get('get_schema_address', [arg]);
 
     return result.stack.readAddress();
   }
@@ -199,12 +202,17 @@ export class SignProtocol implements Contract {
 
   async sendRegisterSchema(provider: ContractProvider, via: Sender, schema: SchemaConfig, signature?: Uint8Array, hook?: Cell) {
     const schemaCell = schemaConfigToCell(schema);
-    const messageBuilder = beginCell()
+    let messageBuilder = beginCell()
       .storeUint(OpCode.Register, 32)
       .storeUint(0, 64)
-      .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(schemaCell)
-      .storeUint(hook ? 1 : 0, 1);
+      .storeUint(signature ? 1 : 0, 1);
+
+    if (signature) {
+      messageBuilder.storeBuffer(Buffer.from(signature))
+    }
+
+    messageBuilder = messageBuilder.storeUint(hook ? 1 : 0, 1);
 
     if (hook) {
       messageBuilder.storeRef(hook);
@@ -223,26 +231,36 @@ export class SignProtocol implements Contract {
     provider: ContractProvider,
     via: Sender,
     attestation: AttestationConfig,
-    schema: SchemaConfig,
     signature?: Uint8Array,
     fees?: bigint,
+    hook?: Cell,
   ) {
-    const schemaCell = schemaConfigToCell(schema);
     const attestCell = attestationConfigToCell(attestation);
-    const messageBody = beginCell()
+    let messageBuilder = beginCell()
       .storeUint(OpCode.Attest, 32)
       .storeUint(0, 64)
-      .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(attestCell)
-      .storeRef(schemaCell);
+      .storeUint(signature ? 1 : 0, 1);
+
+    if (signature) {
+      messageBuilder.storeBuffer(Buffer.from(signature))
+    }
+
+    messageBuilder = messageBuilder.storeUint(fees ? 1 : 0, 1);
 
     if (fees) {
-      messageBody.storeCoins(fees);
+      messageBuilder.storeCoins(fees)
+    }
+
+    messageBuilder = messageBuilder.storeUint(hook ? 1 : 0, 1);
+
+    if (hook) {
+      messageBuilder.storeRef(hook);
     }
 
     const result = await provider.internal(via, {
       value: fees || '0.04',
-      body: messageBody.endCell(),
+      body: messageBuilder.endCell(),
     });
 
     return result;
@@ -254,19 +272,29 @@ export class SignProtocol implements Contract {
     attester: Address,
     attestation: AttestationOffchainConfig,
     signature?: Uint8Array,
+    hook?: Cell,
   ) {
     const attestCell = attestationOffchainConfigToCell(attestation);
-    const messageBody = beginCell()
+    let messageBuilder = beginCell()
       .storeUint(OpCode.Attest, 32)
       .storeUint(0, 64)
-      .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
       .storeRef(attestCell)
-      .storeRef(beginCell().storeAddress(attester).endCell())
-      .endCell();
+      .storeAddress(attester)
+      .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64);
+
+    if (signature) {
+      messageBuilder.storeBuffer(Buffer.from(signature))
+    }
+
+    messageBuilder = messageBuilder.storeUint(hook ? 1 : 0, 1);
+
+    if (hook) {
+      messageBuilder.storeRef(hook);
+    }
 
     const result = await provider.internal(via, {
       value: '0.04',
-      body: messageBody,
+      body: messageBuilder.endCell(),
     });
 
     return result;
@@ -275,30 +303,37 @@ export class SignProtocol implements Contract {
   async sendRevokeAttestation(
     provider: ContractProvider,
     via: Sender,
-    attestationId: Address,
-    attestation: AttestationConfig,
-    schema: SchemaConfig,
+    attestationAddress: Address,
     reason: string,
     signature?: Uint8Array,
     fees?: bigint,
+    hook?: Cell,
   ) {
-    const schemaCell = schemaConfigToCell(schema);
-    const attestCell = attestationConfigToCell(attestation);
-    const messageBody = beginCell()
+    let messageBuilder = beginCell()
       .storeUint(OpCode.Revoke, 32)
       .storeUint(0, 64)
-      .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
-      .storeRef(beginCell().storeAddress(attestationId).storeUint(stringToInt(reason), 256).endCell())
-      .storeRef(attestCell)
-      .storeRef(schemaCell);
+      .storeAddress(attestationAddress)
+      .storeStringTail(reason);
+
+    if (signature) {
+      messageBuilder.storeBuffer(Buffer.from(signature))
+    }
+
+    messageBuilder = messageBuilder.storeUint(fees ? 1 : 0, 1);
 
     if (fees) {
-      messageBody.storeCoins(fees);
+      messageBuilder.storeCoins(fees)
+    }
+
+    messageBuilder = messageBuilder.storeUint(hook ? 1 : 0, 1);
+
+    if (hook) {
+      messageBuilder.storeRef(hook);
     }
 
     const result = await provider.internal(via, {
       value: fees || '0.04',
-      body: messageBody.endCell(),
+      body: messageBuilder.endCell(),
     });
 
     return result;
@@ -307,23 +342,30 @@ export class SignProtocol implements Contract {
   async sendRevokeAttestationOffchain(
     provider: ContractProvider,
     via: Sender,
-    attestationId: Address,
-    attestation: AttestationOffchainConfig,
+    attestationAddress: Address,
     reason: string,
     signature?: Uint8Array,
+    hook?: Cell,
   ) {
-    const attestCell = attestationOffchainConfigToCell(attestation);
-    const messageBody = beginCell()
+    let messageBuilder = beginCell()
       .storeUint(OpCode.Revoke, 32)
       .storeUint(0, 64)
-      .storeBuffer(signature ? Buffer.from(signature) : Buffer.alloc(64), 64)
-      .storeRef(beginCell().storeAddress(attestationId).storeUint(stringToInt(reason), 256).endCell())
-      .storeRef(attestCell)
-      .endCell();
+      .storeAddress(attestationAddress)
+      .storeStringTail(reason);
+
+    if (signature) {
+      messageBuilder.storeBuffer(Buffer.from(signature))
+    }
+
+    messageBuilder = messageBuilder.storeUint(hook ? 1 : 0, 1);
+
+    if (hook) {
+      messageBuilder.storeRef(hook);
+    }
 
     const result = await provider.internal(via, {
       value: '0.04',
-      body: messageBody,
+      body: messageBuilder.endCell(),
     });
 
     return result;

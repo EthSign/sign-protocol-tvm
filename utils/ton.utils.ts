@@ -34,11 +34,11 @@ export function addressToSlice(address: Address): Slice {
   return beginCell().storeAddress(address).endCell().asSlice();
 }
 
-export function stringToBitString(str: string): BitString {
-  return new BitString(Buffer.from(str), 0, str.length * 8);
+export function stringToBitString(str: string, len: number = 127): BitString {
+  return new BitString(Buffer.from(str), 0, len);
 }
 
-export function bitStringToString(bits: BitString, len: number): string {
+export function bitStringToString(bits: BitString, len: number = 127): string {
   const decoder = new TextDecoder();
   const subBuffer = bits.subbuffer(0, len);
 

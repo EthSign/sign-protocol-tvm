@@ -1,4 +1,4 @@
-() _revoke_offchain(int timestamp, slice attester, int reason, int delegate_mode, slice sender_address, int query_id) impure {
+() _revoke_offchain(int timestamp, slice attester, slice reason, int delegate_mode, slice sender_address) impure {
   if (~(__offchain_attestation_exists(timestamp))) {
     throw(error::offchain_attestation_nonexistent);
   }
@@ -16,12 +16,12 @@
 
 ;; =============== revoke =============================
 
-() revoke_offchain(int timestamp, slice attester, int attester_pubkey, int reason, slice delegate_signature, slice sender_address) impure {
+() revoke_offchain(int timestamp, slice attester, int attester_pubkey, slice reason, slice delegate_signature, slice sender_address) impure {
   int delegate_mode = delegate_signature.slice_empty?() ? 0 : 1;
 
   if (delegate_mode) {
     __check_delegation_signature(attester_pubkey, get_delegated_offchain_revoke_hash(my_address(), reason), delegate_signature);
   }
 
-  _revoke_offchain(timestamp, attester, reason, delegate_mode, sender_address, 0);
+  _revoke_offchain(timestamp, attester, reason, delegate_mode, sender_address);
 }

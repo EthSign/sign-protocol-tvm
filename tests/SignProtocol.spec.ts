@@ -6,7 +6,8 @@ import { compile } from '@ton/blueprint';
 import { Schema, SchemaConfig, schemaConfigToCell } from '../wrappers';
 import { DataLocation, getRegisterHashCell, signCell } from '../utils';
 import { KeyPair, mnemonicNew, mnemonicToWalletKey } from 'ton-crypto';
-import { WalletContractV4 } from '@ton/ton';
+import { TonClient, WalletContractV4 } from '@ton/ton';
+import { SmartContract } from 'ton-contract-executor';
 
 describe('SignProtocol', () => {
   let code: Cell, schemaCode: Cell, attestationCode: Cell, attestationOffchainCode: Cell;
@@ -120,6 +121,7 @@ describe('SignProtocol', () => {
   it('should register schema', async () => {
     const schemaCounter = await signProtocol.getSchemaCounter();
     const schema: SchemaConfig = {
+      dataLen: 4,
       data: 'Test',
       dataLocation: DataLocation.ONCHAIN,
       maxValidFor: new Date('2025-01-01'),
@@ -127,7 +129,7 @@ describe('SignProtocol', () => {
       registrant: users[0].address,
       registrantPubKey: users[0].publicKey,
       revocable: true,
-      schemaCounterId: await signProtocol.getSchemaCounter(),
+      schemaId: await signProtocol.getSchemaCounter(),
       attestationCode,
       spAddress: signProtocol.address,
     };
@@ -136,24 +138,21 @@ describe('SignProtocol', () => {
 
     const trans = await signProtocol.sendRegisterSchema(admin.getSender(), schema, signature);
 
-    console.log(trans.transactions.map((t) => t.blockchainLogs).join('\n'));
-
     expect(trans.transactions).toHaveTransaction({
       from: admin.address,
       to: signProtocol.address,
       success: true,
     });
 
-    const schemaId = await signProtocol.getSchemaId(schema);
-    const schemaContract = await blockchain.getContract(schemaId);
+    const schemaAddress = await signProtocol.getSchemaAddress(schema.schemaId);
     const newSchemaCounter = await signProtocol.getSchemaCounter();
 
     expect(newSchemaCounter).toEqual(schemaCounter + 1);
 
-    const schem = blockchain.openContract(Schema.createFromAddress(schemaId));
+    expect((await blockchain.getContract(schemaAddress)).accountState?.type).toBe('active');
 
-    const schemaData = await schem.getSchemaData();
+    const schemaData = await blockchain.openContract(Schema.createFromAddress(schemaAddress)).getSchemaData();
 
-    console.log('SchemaData', schemaData);
+    expect(schemaData.data).toEqual(schema.data);
   });
 });

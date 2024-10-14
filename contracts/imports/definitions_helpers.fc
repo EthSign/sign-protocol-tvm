@@ -9,16 +9,16 @@ int get_delegated_attest_hash(cell attestation) inline_ref;
 int get_delegated_attest_batch_hash(tuple attestations, int attestations_len) inline_ref;
 int get_delegated_offchain_attest_hash(cell offchain_attestation) inline_ref;
 int get_delegated_offchain_attest_batch_hash(tuple offchain_attestation_ids, int offchain_attestation_ids_len) inline_ref;
-int get_delegated_revoke_hash(slice attestation_id, int reason) inline_ref;
+int get_delegated_revoke_hash(slice attestation_id, slice reason) inline_ref;
 int get_delegated_revoke_batch_hash(tuple attestation_ids, tuple reasons) inline_ref;
-int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, int reason) inline_ref;
+int get_delegated_offchain_revoke_hash(slice offchain_attestation_id, slice reason) inline_ref;
 int get_delegated_offchain_revoke_batch_hash(tuple offchain_attestation_ids, tuple reasons) inline_ref;
 
-(slice, int, int, int, int, int, int, int, slice, cell) __get_schema_data(cell _schema) impure inline;
-(slice, slice, int, int, slice, int, int, int, int, int, tuple, int, int, int, int, slice) __get_attestation_data(cell _attestation) impure inline;
+(slice, int, int, int, int, int, int, slice, int, slice, cell) __get_schema_data(cell _schema) impure inline;
+(slice, slice, int, int, slice, int, int, int, int, int, tuple, int, slice, int, int, int, slice, int, int, slice) __get_attestation_data(cell _attestation) impure inline;
 (slice, int, int) __get_offchain_attestation_data(cell _offchain_attestation) impure inline;
-int __schema_exists(int schema_counter_id, int schema_timestamp) impure inline;
-int __attestation_exists(int attestation_counter_id, int attestation_counter) impure inline ;
+int __schema_exists(int schema_id, int schema_timestamp) impure inline;
+int __attestation_exists(int attestation_id, int attestation_counter) impure inline;
 int __offchain_attestation_exists(int attestation_timestamp) impure inline;
 
 (cell) compose_init(cell code, cell data) inline;

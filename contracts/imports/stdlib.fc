@@ -125,7 +125,7 @@ int cur_lt() asm "LTIME";
 int block_lt() asm "BLOCKLT";
 
 ;;; Computes the representation hash of a `cell` [c] and returns it as a 256-bit unsigned integer `x`.
-;;; Useful for signing and checking signatures of arbitrary entities represented by a tree of cells.
+;;; Useful for signing and checkingsignatures of arbitrary entities represented by a tree of cells.
 int cell_hash(cell c) asm "HASHCU";
 
 ;;; Computes the hash of a `slice s` and returns it as a 256-bit unsigned integer `x`.
@@ -143,19 +143,19 @@ int string_hash(slice s) asm "SHA256U";
 
 ;;; Checks the Ed25519-`signature` of a `hash` (a 256-bit unsigned integer, usually computed as the hash of some data)
 ;;; using [public_key] (also represented by a 256-bit unsigned integer).
-;;; The signature must contain at least 512 data bits; only the first 512 bits are used.
-;;; The result is `−1` if the signature is valid, `0` otherwise.
+;;; Thesignature must contain at least 512 data bits; only the first 512 bits are used.
+;;; The result is `−1` if thesignature is valid, `0` otherwise.
 ;;; Note that `CHKSIGNU` creates a 256-bit slice with the hash and calls `CHKSIGNS`.
 ;;; That is, if [hash] is computed as the hash of some data, these data are hashed twice,
 ;;; the second hashing occurring inside `CHKSIGNS`.
-int check_signature(int hash, slice signature, int public_key) asm "CHKSIGNU";
+int check_signature(int hash, slicesignature, int public_key) asm "CHKSIGNU";
 
 ;;; Checks whether [signature] is a valid Ed25519-signature of the data portion of `slice data` using `public_key`,
 ;;; similarly to [check_signature].
 ;;; If the bit length of [data] is not divisible by eight, throws a cell underflow exception.
-;;; The verification of Ed25519 signatures is the standard one,
+;;; The verification of Ed25519signatures is the standard one,
 ;;; with sha256 used to reduce [data] to the 256-bit number that is actually signed.
-int check_data_signature(slice data, slice signature, int public_key) asm "CHKSIGNS";
+int check_data_signature(slice data, slicesignature, int public_key) asm "CHKSIGNS";
 
 {---
   # Computation of boc size

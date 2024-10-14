@@ -1,4 +1,16 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import {
+  Address,
+  beginCell,
+  Cell,
+  Contract,
+  contractAddress,
+  ContractProvider,
+  parseTuple,
+  Sender,
+  SendMode,
+  serializeTuple,
+  Tuple,
+} from '@ton/core';
 import {
   bufferToInt,
   DataLocation,
@@ -6,14 +18,13 @@ import {
   intToBuffer,
   intToString,
   OpCode,
-  stringToInt,
   unixTimestampToDate,
 } from '../utils';
 import { SchemaConfig, schemaConfigToCell } from './Schema';
 
 export type AttestationConfig = {
-  schemaId: Address;
-  linkedAttestationId?: Address;
+  schemaAddress: Address;
+  linkedAttestationAddress?: Address;
   attestTimestamp: Date;
   revokeTimestamp?: Date;
   attester: Address;
@@ -21,17 +32,22 @@ export type AttestationConfig = {
   validUntil: Date;
   dataLocation: DataLocation;
   revoked?: boolean;
-  recipients: Address[];
+  revocable: boolean;
+  recipients: string[];
+  dataLen: number;
   data: string;
-  schemaCounterId: number;
-  linkedAttestationCounterId?: number;
-  attestationCounterId: number;
+  reasonLen?: number;
+  reason?: string;
+  spAddress: Address;
+  schemaId: number;
+  linkedAttestationId?: number;
+  attestationId: number;
 };
 
 export function attestationConfigToCell(config: AttestationConfig): Cell {
   const {
-    schemaId,
-    linkedAttestationId = null,
+    schemaAddress,
+    linkedAttestationAddress = null,
     attestTimestamp,
     revokeTimestamp = null,
     attester,
@@ -40,27 +56,55 @@ export function attestationConfigToCell(config: AttestationConfig): Cell {
     dataLocation,
     revoked,
     recipients,
+    dataLen,
     data,
-    schemaCounterId,
-    linkedAttestationCounterId = 0,
-    attestationCounterId,
+    schemaId,
+    linkedAttestationId = 0,
+    attestationId,
+    revocable,
+    spAddress,
+    reasonLen = 0,
+    reason = '',
   } = config;
 
-  const c3 = beginCell().storeUint(recipients.length, 64);
+  let c3 = beginCell().storeUint(recipients.length, 64);
+  let t: Tuple = {
+    items: [],
+    type: 'tuple',
+  }
 
-  recipients.map((recipient) => {
-    c3.storeAddress(recipient);
+  recipients.forEach((recipient) => {
+    t = {
+      items: [{
+        type: 'cell',
+        cell:
+          beginCell()
+            .storeUint(recipient.length, 8)
+            .storeStringTail(recipient)
+            .endCell(),
+      },
+        t,
+      ],
+      type: 'tuple',
+    }
   });
 
+  c3 = c3.storeRef(serializeTuple(t.items));
+
   const c2 = beginCell()
-    .storeUint(stringToInt(data), 256)
-    .storeUint(schemaCounterId, 64)
-    .storeUint(linkedAttestationCounterId, 64)
-    .storeUint(attestationCounterId, 64)
+    .storeUint(dataLen, 8)
+    .storeStringTail(data)
+    .storeUint(schemaId, 64)
+    .storeUint(linkedAttestationId, 64)
+    .storeUint(attestationId, 64)
+    .storeAddress(spAddress)
+    .storeUint(Number(revocable), 1)
+    .storeUint(reasonLen, 8)
+    .storeStringTail(reason)
     .endCell();
   const initState = beginCell()
-    .storeAddress(schemaId)
-    .storeAddress(linkedAttestationId)
+    .storeAddress(schemaAddress)
+    .storeAddress(linkedAttestationAddress)
     .storeAddress(attester)
     .storeUint(dateToUnixTimestamp(attestTimestamp), 32)
     .storeUint(revokeTimestamp ? dateToUnixTimestamp(revokeTimestamp) : 0, 32)
@@ -103,8 +147,8 @@ export class Attestation implements Contract {
     const result = await provider.get('get_attestation_data', []);
     let cellHash = result.stack.readCell().beginParse();
 
-    const schemaId = cellHash.loadAddress();
-    const linkedAttestationId = cellHash.loadAddressAny() as Address;
+    const schemaAddress = cellHash.loadAddress();
+    const linkedAttestationAddress = cellHash.loadAddressAny() as Address;
     const attester = cellHash.loadAddress();
     const attestTimestamp = cellHash.loadUint(32);
     const revokeTimestamp = cellHash.loadUint(32);
@@ -115,16 +159,26 @@ export class Attestation implements Contract {
 
     const c2 = cellHash.loadRef().beginParse();
     const data = intToString(c2.loadUint(256));
-    const schemaCounterId = c2.loadUint(64);
-    const linkedAttestationCounterId = c2.loadUint(64);
-    const attestationCounterId = c2.loadUint(64);
+    const schemaId = c2.loadUint(64);
+    const linkedAttestationId = c2.loadUint(64);
+    const attestationId = c2.loadUint(64);
+    const spAddress = c2.loadAddress();
+    const revocable = !!c2.loadUint(1);
+    const reason = c2.loadStringTail();
 
     const c3 = cellHash.loadRef().beginParse();
     const recipientsLen = c3.loadUint(64);
-    const recipients: Address[] = [];
+    const recipients: string[] = [];
 
     Array.from({ length: recipientsLen }).forEach(() => {
-      recipients.push(c3.loadAddress());
+      const t = parseTuple(c3.loadRef());
+      const item = t.pop();
+      const builder = item?.type === 'cell' ? item.cell.beginParse() : beginCell().endCell().beginParse();
+      builder.loadUint(8);
+
+      recipients.push(
+        builder.loadStringTail(),
+      );
     });
 
     return {
@@ -137,11 +191,16 @@ export class Attestation implements Contract {
       validUntil: unixTimestampToDate(validUntil),
       dataLocation: dataLocation.toString() as unknown as DataLocation,
       revoked: !!revoked,
+      dataLen: data.length,
       data,
-      schemaCounterId,
-      linkedAttestationCounterId,
-      attestationCounterId,
+      schemaAddress,
+      linkedAttestationAddress,
+      attestationId,
       recipients: recipients.map((recipient) => recipient),
+      revocable,
+      reasonLen: reason.length,
+      reason,
+      spAddress,
     };
   }
 

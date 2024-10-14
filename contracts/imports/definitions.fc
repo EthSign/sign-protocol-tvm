@@ -14,14 +14,12 @@ global cell schema_code;
 
 ;; =============== functions =============================
 
-() register(cell schema, slice delegate_signature) impure inline;
+() register(cell schema_code, cell schema, slice delegate_signature) impure inline;
 
-;;() _attest(cell _attestation, cell _schema, int delegate_mode, slice sender_address, cell master_msg, int coins) impure;
 () _attest_offchain(cell offchain_attestation, slice attester) impure;
-;;() attest(cell attestation, cell schema, slice delegate_signature, slice sender_address) impure;
 () attest_offchain(cell offchain_attestation, slice delegate_attester, slice delegate_signature, slice sender_address) impure;
 
-;;() _revoke(slice attestation_id, cell attestation, cell schema, int reason, int delegate_mode, slice sender_address, int query_id, int coins) impure;
-;;() _revoke_offchain(int reason, int delegate_mode, slice sender_address, int query_id) impure;
-;;() revoke(slice attestation_id, cell attestation, cell schema, int reason, slice delegate_signature, slice sender_address) impure;
-;;() revoke_offchain(slice offchain_attestation_id, cell offchain_attestation, int reason, slice delegate_signature, slice sender_address) impure;
+;;() _revoke(slice attestation_id, cell attestation, cell schema, slice reason, int delegate_mode, slice sender_address, int query_id, int coins) impure;
+;;() _revoke_offchain(slice reason, int delegate_mode, slice sender_address, int query_id) impure;
+;;() revoke(slice attestation_id, cell attestation, cell schema, slice reason, slice delegate_signature, slice sender_address) impure;
+;;() revoke_offchain(slice offchain_attestation_id, cell offchain_attestation, slice reason, slice delegate_signature, slice sender_address) impure;

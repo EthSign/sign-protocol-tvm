@@ -1,6 +1,12 @@
-int min_tons_for_storage() asm "10000000 PUSHINT"; ;; 0.01 TON
-int gas_consumption() asm "20000000 PUSHINT"; ;; 0.02 TON
-int master_contract_storage_fee() asm "500000 PUSHINT"; ;; 0.005 TON
+const int min_tons_for_storage = 10000000; ;; 0.01 TON
+const int gas_consumption = 20000000; ;; 0.02 TON
+const int master_contract_storage_fee = 500000; ;; 0.005 TON
+
+forall X -> int is_null (X x) asm "ISNULL";
+forall X -> (tuple, ()) push_back (tuple tail, X head) asm "CONS";
+forall X -> (tuple, (X)) pop_back (tuple t) asm "UNCONS";
+forall X -> tuple cast_to_tuple (X x) asm "NOP";
+forall X -> int cast_to_int (X x) asm "NOP";
 
 ;; =============== sub-contract utils =============================
 builder store_withdraw_completed(builder b) inline {
@@ -27,16 +33,14 @@ builder store_withdraw_completed(builder b) inline {
 }
 
 () send_msg_with_body_and_init(int bounceable?, slice recipient, int value, cell body, cell init, int mode) impure {
-    ~dump(bounceable?);
     send_raw_message(begin_cell()
         .store_uint(bounceable? ? 0x18 : 0x10, 6)
         .store_slice(recipient)
         .store_coins(value)
-        .store_uint(7, 108)
+        .store_uint(3, 107)
         .store_ref(init)
         .store_ref(body)
     .end_cell(), mode);
-     ~dump(mode);
 }
 
 (cell) compose_body(int op, int query_id, builder body) inline {

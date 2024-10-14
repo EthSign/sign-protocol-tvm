@@ -39,7 +39,7 @@ export async function run(provider: NetworkProvider) {
   console.log('Attestation', attestation);
   console.log('Schema', schemaData);
 
-  await signProtocol.sendAttestOffchain(provider.sender(), attester, attestation, signature);
+  await signProtocol.sendAttestOffchain(provider.sender(), attester, attestation, signature ?);
 
   // debug
   // const contractAddress = Address.parse(process.env.SIGN_PROTOCOL_ADDRESS ?? '');

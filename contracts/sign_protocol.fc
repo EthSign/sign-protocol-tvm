@@ -141,7 +141,7 @@
 
     int amount = in_msg~load_coins();
 
-    throw_if(error::invalid_message_params, (balance - amount) < min_tons_for_storage());
+    throw_if(error::invalid_message_params, (balance - amount) < min_tons_for_storage);
 
     builder content = begin_cell().store_withdraw_completed();
     var body = begin_cell()
@@ -210,14 +210,15 @@
       throw(error::paused);
     }
     
-    var signature = in_msg~load_bits(512);
     cell schema = in_msg~load_ref();
-    int has_hook? = in_msg~load_uint(1);
+    int has_signature = in_msg~load_uint(1);
+    var signature = has_signature ? in_msg~load_bits(512) : "";
+    int has_hook = in_msg~load_uint(1);
 
-    register(schema, signature);
+    register(schema_code, schema, signature);
     save_data(version, admin_address, paused, schema_counter + 1, attestation_counter, attestation_code, attestation_offchain_code, schema_code);
 
-    if (has_hook?) {
+    if (has_hook) {
       send_hook(in_msg~load_ref());
     }
 
@@ -231,14 +232,15 @@
       throw(error::paused);
     }
     
-    var signature = in_msg~load_bits(512);
     cell attestation = in_msg~load_ref();
-    int has_fees? = in_msg~load_uint(1);
-    int fees = has_fees? ? in_msg~load_coins() : 0;
-    int has_hook? = in_msg~load_uint(1);
+    int has_signature = in_msg~load_uint(1);
+    var signature = has_signature ? in_msg~load_bits(512) : "";
+    int has_fees = in_msg~load_uint(1);
+    int fees = has_fees ? in_msg~load_coins() : 0;
+    int has_hook = in_msg~load_uint(1);
     (
       slice schema_address, 
-      slice _linked_attestation_id, 
+      slice _linked_attestation_address, 
       int _attest_timestamp, 
       int _revoke_timestamp, 
       slice _attester, 
@@ -247,31 +249,35 @@
       int _data_location, 
       int _revoked, 
       int _recipients_len, 
-      tuple _recipients, 
-      int _data,
-      int _schema_counter_id, 
-      int _linked_attestation_counter_id, 
-      int _attestation_counter_id,
-      slice _sp_address
+      tuple _recipients,
+      int _data_len,
+      slice _data,
+      int _schema_id, 
+      int _linked_attestation_id, 
+      int _attestation_id,
+      slice _sp_address,
+      int _revocable,
+      int _reason_len,
+      slice _reason
     ) = __get_attestation_data(attestation);
 
-    builder hook_body = begin_cell()
-      .store_slice(signature)
+    builder body = begin_cell()
       .store_ref(attestation)
+      .store_slice(signature)
       .store_slice(sender_address)
       .store_coins(fees)
       .store_int(attestation_counter, 64)
       .store_int(schema_counter, 64)
-      .store_int(has_hook?, 1);
+      .store_int(has_hook, 1);
     
-    if (has_hook?) {
-      hook_body.store_ref(in_msg~load_ref());
+    if (has_hook) {
+      body.store_ref(in_msg~load_ref());
     }
 
     cell body = compose_body(
       op::attest,
       1,
-      hook_body
+      body
     );
     
     send_msg_with_body(1, schema_address, 0, body, 1);
@@ -287,9 +293,10 @@
       throw(error::paused);
     }
     
-    var signature = in_msg~load_bits(512);
     cell offchain_attestation = in_msg~load_ref();
     slice delegate_attester = in_msg~load_msg_addr();
+    int has_signature = in_msg~load_uint(1);
+    var signature = has_signature ? in_msg~load_bits(512) : "";
     int has_hook? = in_msg~load_uint(1);
 
     attest_offchain(offchain_attestation, delegate_attester, signature, sender_address);
@@ -308,33 +315,34 @@
       throw(error::paused);
     }
 
-    var signature = in_msg~load_bits(512);
-    int reason = in_msg~load_uint(256);
     slice attestation_address = in_msg~load_msg_addr();
-    slice schema_address = in_msg~load_msg_addr();
+    int reason_len = in_msg~load_uint(8);
+    slice reason = in_msg~load_bits(reason_len);
+    int has_signature = in_msg~load_uint(1);
+    var signature = has_signature ? in_msg~load_bits(512) : "";
     int has_fees? = in_msg~load_uint(1);
     int fees = has_fees? ? in_msg~load_coins() : 0;
     int has_hook? = in_msg~load_uint(1);
 
-    builder hook_body = begin_cell()
+    builder msg_body = begin_cell()
       .store_slice(signature)
-      .store_int(reason, 256)
-      .store_slice(attestation_address)
+      .store_uint(reason_len, 8)
+      .store_slice(reason)
       .store_slice(sender_address)
       .store_coins(fees)
       .store_int(has_hook?, 1);
-    
+
     if (has_hook?) {
-      hook_body.store_ref(in_msg~load_ref());
+      msg_body.store_ref(in_msg~load_ref());
     }
 
     cell body = compose_body(
       op::revoke,
       query_id,
-      hook_body
+      msg_body
     );
-    
-    send_msg_with_body(1, schema_address, 0, body, 1);
+
+    send_msg_with_body(1, attestation_address, 0, body, 1);
 
     return ();
   }
@@ -346,14 +354,17 @@
       throw(error::paused);
     }
 
-    var signature = in_msg~load_bits(512);
-    int reason = in_msg~load_uint(256);
     slice attestation_offchain_address = in_msg~load_msg_addr();
+    int reason_len = in_msg~load_uint(8);
+    slice reason = in_msg~load_bits(reason_len);
+    int has_signature = in_msg~load_uint(1);
+    var signature = has_signature ? in_msg~load_bits(512) : "";
     int has_hook? = in_msg~load_uint(1);
 
     builder hook_body = begin_cell()
       .store_slice(signature)
-      .store_int(reason, 256)
+      .store_uint(reason_len, 8)
+      .store_slice(reason)
       .store_slice(sender_address)
       .store_int(has_hook?, 1);
     
@@ -401,23 +412,23 @@ int get_attestation_counter() method_id {
   return attestation_counter;
 }
 
-slice get_schema_id(cell schema) method_id {
+slice get_schema_address(int schema_id) method_id {
   load_data();
-  cell init = compose_init(schema_code, schema);
+  cell init = compose_schema_init(my_address(), schema_id);
   slice schema_address = calculate_address(init);
 
   return schema_address;
 }
 
-slice get_attestation_id(cell attestation) method_id {
+slice get_attestation_address(int attestation_id, int schema_id) method_id {
   load_data();
-  cell init = compose_init(attestation_code, attestation);
+  cell init = compose_attestation_init(my_address(), schema_id, attestation_id);
   slice attestation_address = calculate_address(init);
 
   return attestation_address;
 }
 
-slice get_attestation_offchain_id(cell attestation_offchain) method_id {
+slice get_attestation_offchain_address(cell attestation_offchain) method_id {
   load_data();
   cell init = compose_init(attestation_offchain_code, attestation_offchain);
   slice attestation_offchain_address = calculate_address(init);

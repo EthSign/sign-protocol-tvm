@@ -17,7 +17,7 @@ export async function run(provider: NetworkProvider) {
   const schemaData = await schema.getSchemaData();
   console.log('key', schemaData.registrantPubKey.toString('hex'))
   const attestation: AttestationConfig = {
-    attestationCounterId: 8,
+    attestationId: 8,
     attester: Address.parse(process.env.ADMIN_ADDRESS ?? ''),
     attesterPubKey: keyPair.publicKey,
     attestTimestamp: new Date('2024-05-22T08:41:05.035Z'),
@@ -25,7 +25,7 @@ export async function run(provider: NetworkProvider) {
     dataLocation: DataLocation.ONCHAIN,
     linkedAttestationCounterId: 0,
     recipients: [Address.parse('0QCm4j6oTqRNqS8k0MIQyuqeSoAgApoXzVLX0_dYvAfD_64N')],
-    schemaCounterId: schemaData.schemaCounterId,
+    schemaId: schemaData.schemaId,
     schemaId: Address.parse(SCHEMA_ADDRESS),
     validUntil: new Date('2024-12-12'),
   };
